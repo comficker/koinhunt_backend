@@ -16,6 +16,9 @@ class Term(BaseModel, HasIDSting):
 
     taxonomy = models.CharField(max_length=10, default="tag")
 
+    class Meta:
+        unique_together = [['id_string', 'taxonomy']]
+
 
 class Partner(BaseModel, HasIDSting):
     meta = models.JSONField(null=True, blank=True)
@@ -55,6 +58,7 @@ class Project(BaseModel, HasIDSting):
 
 
 class Token(BaseModel):
+    meta = models.JSONField(null=True, blank=True)
     project = models.ForeignKey(Project, related_name="tokens", on_delete=models.CASCADE)
     chain = models.ForeignKey(Term, related_name="tokens", on_delete=models.CASCADE)
     symbol = models.CharField(max_length=42)
@@ -65,13 +69,13 @@ class Token(BaseModel):
 
 
 class Event(BaseModel):
-    meta = models.JSONField(null=True, blank=True)
+    partner = models.ForeignKey(Partner, related_name="events", on_delete=models.CASCADE, null=True, blank=True)
+    project = models.ForeignKey(Project, related_name="events", on_delete=models.CASCADE)
+
     name = models.CharField(max_length=128)
     description = models.CharField(max_length=600, blank=True, null=True)
     media = models.ForeignKey(Media, related_name="events", on_delete=models.SET_NULL, null=True, blank=True)
-
-    partner = models.ForeignKey(Partner, related_name="events", on_delete=models.CASCADE, null=True, blank=True)
-    project = models.ForeignKey(Project, related_name="events", on_delete=models.CASCADE)
+    meta = models.JSONField(null=True, blank=True)
 
     event_name = models.CharField(max_length=20, default="launch")  # launch airdrop presale ama audit partner collab
     event_date_start = models.DateTimeField(null=True, blank=True)

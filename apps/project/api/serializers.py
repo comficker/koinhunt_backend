@@ -33,17 +33,44 @@ class PartnerSerializer(serializers.ModelSerializer):
 
 class ProjectSerializer(serializers.ModelSerializer):
     id_string = serializers.CharField(required=False)
+    events = serializers.SerializerMethodField()
 
     class Meta:
         model = models.Project
         fields = '__all__'
-        extra_fields = []
+        extra_fields = ["events"]
 
     def to_representation(self, instance):
         self.fields["terms"] = TermSerializer(many=True)
         self.fields["media"] = MediaSerializer()
         self.fields["hunter"] = UserSerializer()
         return super(ProjectSerializer, self).to_representation(instance)
+
+    def get_events(self, instance):
+        return EventSimpleSerializer(instance.events.all(), many=True).data
+
+
+class ProjectDetailSerializer(serializers.ModelSerializer):
+    id_string = serializers.CharField(required=False)
+    events = serializers.SerializerMethodField()
+    tokens = serializers.SerializerMethodField()
+
+    class Meta:
+        model = models.Project
+        fields = '__all__'
+        extra_fields = ["events"]
+
+    def to_representation(self, instance):
+        self.fields["terms"] = TermSerializer(many=True)
+        self.fields["media"] = MediaSerializer()
+        self.fields["hunter"] = UserSerializer()
+        return super(ProjectDetailSerializer, self).to_representation(instance)
+
+    def get_events(self, instance):
+        return EventSimpleSerializer(instance.events.all(), many=True).data
+
+    def get_tokens(self, instance):
+        return TokenSimpleSerializer(instance.tokens.all(), many=True).data
 
 
 class TokenSerializer(serializers.ModelSerializer):
@@ -58,6 +85,17 @@ class TokenSerializer(serializers.ModelSerializer):
         return super(TokenSerializer, self).to_representation(instance)
 
 
+class TokenSimpleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.Token
+        fields = '__all__'
+        extra_fields = []
+
+    def to_representation(self, instance):
+        self.fields["chain"] = TermSerializer()
+        return super(TokenSimpleSerializer, self).to_representation(instance)
+
+
 class EventSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Event
@@ -65,6 +103,17 @@ class EventSerializer(serializers.ModelSerializer):
         extra_fields = []
 
     def to_representation(self, instance):
-        self.fields["project"] = TokenSerializer()
+        self.fields["project"] = ProjectSerializer()
         self.fields["partner"] = PartnerSerializer()
         return super(EventSerializer, self).to_representation(instance)
+
+
+class EventSimpleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.Event
+        fields = '__all__'
+        extra_fields = []
+
+    def to_representation(self, instance):
+        self.fields["partner"] = PartnerSerializer()
+        return super(EventSimpleSerializer, self).to_representation(instance)

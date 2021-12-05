@@ -1,7 +1,7 @@
 from django.utils import timezone
 from django.db import models
 from apps.base.interface import BaseModel
-from apps.authentication.models import Wallet
+from apps.authentication.models import Profile
 from apps.project.models import Token
 
 
@@ -9,8 +9,8 @@ from apps.project.models import Token
 class Transaction(BaseModel):
     tx_hash = models.CharField()
     ty_type = models.CharField(default="transfer")
-    fr = models.ForeignKey(Wallet, related_name="fr_transactions", on_delete=models.CASCADE)
-    to = models.ForeignKey(Wallet, related_name="to_transactions", on_delete=models.CASCADE)
+    fr = models.ForeignKey(Profile, related_name="fr_transactions", on_delete=models.CASCADE)
+    to = models.ForeignKey(Profile, related_name="to_transactions", on_delete=models.CASCADE)
     token = models.ForeignKey(Token, related_name="transactions", on_delete=models.CASCADE)
     meta = models.JSONField(null=True, blank=True)
     value = models.FloatField(default=0)
