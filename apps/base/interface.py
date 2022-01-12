@@ -40,6 +40,7 @@ class HasIDSting(models.Model):
     class Meta:
         abstract = True
 
+
 class Taxonomy(models.Model):
     title = models.CharField(max_length=200)
     slug = models.CharField(max_length=200, unique=True, blank=True)

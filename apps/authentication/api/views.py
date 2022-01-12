@@ -8,17 +8,13 @@ from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework_jwt.settings import api_settings
 from rest_framework import status
 from rest_framework import viewsets, permissions
-from django.db import connection
 from django.contrib.auth.models import User
 from apps.authentication.api.serializers import UserSerializer
-from apps.media.models import Media
 from apps.authentication.models import Profile
 from apps.base import pagination
 from web3 import Web3
 from web3.middleware import geth_poa_middleware
 from eth_account.messages import defunct_hash_message
-from django.contrib.auth.tokens import default_token_generator
-from rest_framework_jwt.views import verify_jwt_token
 
 jwt_payload_handler = api_settings.JWT_PAYLOAD_HANDLER
 jwt_encode_handler = api_settings.JWT_ENCODE_HANDLER
@@ -54,13 +50,10 @@ def auth(request):
         return Response(status=status.HTTP_400_BAD_REQUEST)
     else:
         address = address.lower()
-    print(address)
     profile, is_created = Profile.objects.get_or_create(
         address=address,
         chain="BSC"
     )
-    print(is_created)
-    print(profile)
     user = profile.user
     if user is None:
         password = str(uuid.uuid4().hex)[:10]

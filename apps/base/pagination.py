@@ -29,6 +29,7 @@ class Pagination(pagination.PageNumberPagination):
 
     def get_paginated_response(self, data):
         return Response({
+            'instance': self.instance if hasattr(self, 'instance') else None,
             'links': {
                 'next': self.get_next_link(),
                 'previous': self.get_previous_link()

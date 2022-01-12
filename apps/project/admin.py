@@ -1,6 +1,6 @@
 from django.contrib import admin
-from apps.project.models import Term, Partner, Token, Event
+from apps.project.models import Term, Token, Event, Project
 
 # Register your models here.
 
-admin.site.register((Term, Partner, Token, Event))
+admin.site.register((Term, Token, Event, Project))
