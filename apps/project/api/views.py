@@ -152,6 +152,8 @@ class ProjectViewSet(viewsets.ModelViewSet):
         )
         instance = None
         q = Q(db_status=1)
+        if request.GET.get("validated") != "false":
+            q = q & Q(validation_score__gte=1000)
         if request.GET.get("terms__taxonomy"):
             q = q & Q(terms__taxonomy=request.GET.get("terms__taxonomy"))
         if request.GET.get("terms__id_string"):

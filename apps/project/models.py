@@ -33,6 +33,7 @@ class Project(BaseModel, HasIDSting):
     terms = models.ManyToManyField(Term, related_name="projects", blank=True)
     hunter = models.ForeignKey(User, related_name="hunted_projects", on_delete=models.SET_NULL, null=True, blank=True)
     calculated_score = models.FloatField(default=0)
+    validation_score = models.FloatField(default=0)
 
     def calculate_score(self):
         self.calculated_score = self.votes.count()
@@ -94,6 +95,7 @@ class Vote(BaseModel):
     project = models.ForeignKey(Project, related_name="votes", on_delete=models.CASCADE)
     user = models.ForeignKey(User, related_name="votes", on_delete=models.SET_NULL, null=True, blank=True)
     meta = models.JSONField(null=True, blank=True)
+    power = models.FloatField(default=0)
 
 
 class Collection(BaseModel):
