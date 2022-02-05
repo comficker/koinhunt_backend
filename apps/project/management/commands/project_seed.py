@@ -1,6 +1,9 @@
+import os
+
 from django.core.management.base import BaseCommand, CommandError
 from apps.project.models import Project, Term, Event
 from apps.media.models import Media
+from apps.authentication.models import Wallet
 import json
 import datetime
 
@@ -36,6 +39,9 @@ def link_define(url):
 class Command(BaseCommand):
 
     def handle(self, *args, **options):
+        wallet, _ = Wallet.objects.get_or_create(
+            address=os.getenv("MANAGER_WALLET")
+        )
         with open('unique_out.json') as json_file:
             dataset = json.load(json_file)
             for data in dataset:
@@ -50,12 +56,13 @@ class Command(BaseCommand):
                         name=title,
                         description=description[0:599] if description else None,
                         media=media,
+                        hunter=wallet,
                         meta={
                             "links": links,
                             "features": [],
                             "last_price": 0,
                             "market_cap": 0,
-                            "max_supply": 0
+                            "max_supply": 0,
                         }
                     )
                     # ADD TERM

@@ -1,10 +1,10 @@
 from django.utils import timezone
-from django.db.models import Q, Case, When, IntegerField, DurationField
-from django.db.models import Subquery, OuterRef, F
+from django.db.models import Case, When, IntegerField, DurationField
+from django.db.models import F
 from apps.project import models
 from rest_framework import serializers
 from apps.media.api.serializers import MediaSerializer
-from apps.authentication.api.serializers import UserSerializer
+from apps.authentication.api.serializers import WalletSerializer
 
 
 class TermSerializer(serializers.ModelSerializer):
@@ -34,7 +34,7 @@ class ProjectSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         self.fields["terms"] = TermSerializer(many=True)
         self.fields["media"] = MediaSerializer()
-        self.fields["hunter"] = UserSerializer()
+        self.fields["hunter"] = WalletSerializer()
         return super(ProjectSerializer, self).to_representation(instance)
 
     def get_events(self, instance):
@@ -42,9 +42,9 @@ class ProjectSerializer(serializers.ModelSerializer):
 
     def get_collections(self, instance):
         request = self.context.get("request")
-        if request and request.user.is_authenticated and self.context.get("show_collection"):
+        if request and request.wallet and self.context.get("show_collection"):
             return CollectionSerializerSimple(
-                instance.collections.filter(user_id=request.user.id),
+                instance.collections.filter(wallet=request.wallet),
                 many=True
             ).data
         return []
@@ -54,8 +54,6 @@ class ProjectSerializer(serializers.ModelSerializer):
             "total": instance.votes.count(),
             "is_voted": False
         }
-        if self.context.get("request") and self.context['request'].user.is_authenticated:
-            data["is_voted"] = instance.votes.filter(user=self.context['request'].user).exists()
         return data
 
     def get_field_names(self, declared_fields, info):
@@ -87,7 +85,7 @@ class ProjectSerializerDetail(serializers.ModelSerializer):
     def to_representation(self, instance):
         self.fields["terms"] = TermSerializer(many=True)
         self.fields["media"] = MediaSerializer()
-        self.fields["hunter"] = UserSerializer()
+        self.fields["hunter"] = WalletSerializer()
         return super(ProjectSerializerDetail, self).to_representation(instance)
 
     def get_events(self, instance):
@@ -115,15 +113,15 @@ class ProjectSerializerDetail(serializers.ModelSerializer):
             "total": instance.votes.count(),
             "is_voted": False
         }
-        if self.context.get("request") and self.context['request'].user.is_authenticated:
-            data["is_voted"] = instance.votes.filter(user=self.context['request'].user).exists()
+        if self.context.get("request") and self.context['request'].wallet:
+            data["is_voted"] = instance.votes.filter(wallet=self.context['request'].wallet).exists()
         return data
 
     def get_collections(self, instance):
         request = self.context.get("request")
-        if request and request.user.is_authenticated and self.context.get("show_collection"):
+        if request and request.wallet and self.context.get("show_collection"):
             return CollectionSerializerSimple(
-                instance.collections.filter(user_id=request.user.id),
+                instance.collections.filter(wallet=request.wallet),
                 many=True
             ).data
         return []
@@ -192,7 +190,7 @@ class CollectionSerializer(serializers.ModelSerializer):
         extra_fields = ["total"]
 
     def to_representation(self, instance):
-        self.fields["user"] = UserSerializer()
+        self.fields["wallet"] = WalletSerializer()
         self.fields["projects"] = ProjectSerializer(many=True)
         return super(CollectionSerializer, self).to_representation(instance)
 

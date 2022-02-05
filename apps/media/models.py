@@ -2,10 +2,8 @@ from django.db import models
 from apps.base.interface import BaseModel, Taxonomy
 import os
 import datetime
-from uuid import uuid4
 from django.core.exceptions import ValidationError
 from sorl.thumbnail import ImageField
-from django.contrib.auth.models import User
 from django.core.files.temp import NamedTemporaryFile
 from urllib.parse import urlparse
 import requests
@@ -55,8 +53,7 @@ class MediaManager(models.Manager):
             if ext in ['jpg', 'jpeg', 'png']:
                 temp.flush()
                 img = self.model(
-                    title=extra_fields.get("title") if extra_fields.get("title", None) is not None else name,
-                    user=extra_fields.get("user", None)
+                    title=extra_fields.get("title") if extra_fields.get("title", None) is not None else name
                 )
                 img.path.save(name, File(temp))
                 return img
@@ -70,6 +67,5 @@ class Media(BaseModel):
     title = models.CharField(max_length=120, blank=True)
     description = models.CharField(max_length=200, blank=True)
     path = ImageField(upload_to=path_and_rename, max_length=500, validators=[validate_file_size])
-    user = models.ForeignKey(User, related_name='medias', on_delete=models.SET_NULL, blank=True, null=True)
 
     objects = MediaManager()

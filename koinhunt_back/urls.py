@@ -15,16 +15,9 @@ Including another URLconf
 """
 from django.conf import settings
 from django.conf.urls.static import static
-from django.contrib import admin
-from django.urls import path, re_path
 from django.conf.urls import include, url
-from rest_auth.registration.views import VerifyEmailView
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
-    re_path(r'^account-confirm-email/', VerifyEmailView.as_view(), name='account_email_verification_sent'),
-    re_path(r'^account-confirm-email/(?P<key>[-:\w]+)/$', VerifyEmailView.as_view(), name='account_confirm_email'),
-    url(r'^v1/auth/', include(('apps.authentication.api.urls', 'api_auth'))),
     url(r'^v1/media/', include(('apps.media.api.urls', 'api_media'))),
     url(r'^v1/project/', include(('apps.project.api.urls', 'api_coin'))),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

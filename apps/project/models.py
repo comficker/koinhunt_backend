@@ -1,9 +1,9 @@
 from django.db import models
 from django.contrib.contenttypes.fields import GenericForeignKey
-from django.contrib.auth.models import User
 from django.contrib.contenttypes.models import ContentType
 from apps.base.interface import BaseModel, HasIDSting
 from apps.media.models import Media
+from apps.authentication.models import Wallet
 from django.utils.translation import ugettext_lazy as _
 
 
@@ -31,7 +31,7 @@ class Project(BaseModel, HasIDSting):
     id_string = models.CharField(max_length=200)
 
     terms = models.ManyToManyField(Term, related_name="projects", blank=True)
-    hunter = models.ForeignKey(User, related_name="hunted_projects", on_delete=models.SET_NULL, null=True, blank=True)
+    hunter = models.ForeignKey(Wallet, related_name="hunted_projects", on_delete=models.SET_NULL, null=True, blank=True)
     calculated_score = models.FloatField(default=0)
     validation_score = models.FloatField(default=0)
 
@@ -87,13 +87,13 @@ class Event(BaseModel):
     event_date_end = models.DateTimeField(null=True, blank=True)
     verified = models.BooleanField(default=False)
 
-    user = models.ForeignKey(User, related_name="events", null=True, blank=True, on_delete=models.SET_NULL)
-    followers = models.ManyToManyField(User, related_name="followed_events", blank=True)
+    wallet = models.ForeignKey(Wallet, related_name="events", null=True, blank=True, on_delete=models.SET_NULL)
+    followers = models.ManyToManyField(Wallet, related_name="followed_events", blank=True)
 
 
 class Vote(BaseModel):
     project = models.ForeignKey(Project, related_name="votes", on_delete=models.CASCADE)
-    user = models.ForeignKey(User, related_name="votes", on_delete=models.SET_NULL, null=True, blank=True)
+    wallet = models.ForeignKey(Wallet, related_name="votes", on_delete=models.SET_NULL, null=True, blank=True)
     meta = models.JSONField(null=True, blank=True)
     power = models.FloatField(default=0)
 
@@ -103,12 +103,12 @@ class Collection(BaseModel):
     name = models.CharField(max_length=128)
     description = models.CharField(max_length=600, blank=True, null=True)
 
-    user = models.ForeignKey(User, related_name="collections", on_delete=models.CASCADE)
+    wallet = models.ForeignKey(Wallet, related_name="collections", on_delete=models.CASCADE)
     projects = models.ManyToManyField(Project, related_name="collections", blank=True)
 
 
 class Contrib(BaseModel):
-    user = models.ForeignKey(User, related_name="contributions", on_delete=models.CASCADE)
+    wallet = models.ForeignKey(Wallet, related_name="contributions", on_delete=models.CASCADE)
     target_content_type = models.ForeignKey(
         ContentType, related_name='contributions',
         on_delete=models.CASCADE, db_index=True

@@ -1,5 +1,4 @@
 import base64
-import datetime
 from django.utils import timezone
 from django.db.models import Q, Case, When, IntegerField, DurationField
 from django.db.models import Subquery, OuterRef, F
@@ -9,7 +8,7 @@ from django.core.cache.backends.base import DEFAULT_TIMEOUT
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from rest_framework import viewsets, permissions
+from rest_framework import viewsets
 from rest_framework.filters import OrderingFilter, SearchFilter
 from apps.base import pagination
 from . import serializers
@@ -66,7 +65,6 @@ def save_extra(instance, request):
         media = Media.objects.create(
             title=request.data.get("name"),
             path=data,
-            user=request.user if request.user.is_authenticated else None
         )
         instance.media = media
     instance.save()
@@ -76,7 +74,6 @@ class TermViewSet(viewsets.ModelViewSet):
     models = models.Term
     queryset = models.objects.order_by('-created')
     serializer_class = serializers.TermSerializer
-    permission_classes = permissions.IsAuthenticatedOrReadOnly,
     pagination_class = pagination.Pagination
     filter_backends = [OrderingFilter, SearchFilter]
     search_fields = ['name', 'description']
@@ -118,7 +115,6 @@ class ProjectViewSet(viewsets.ModelViewSet):
     models = models.Project
     queryset = models.objects.order_by('-calculated_score')
     serializer_class = serializers.ProjectSerializer
-    permission_classes = permissions.AllowAny,
     pagination_class = pagination.Pagination
     filter_backends = [OrderingFilter, SearchFilter]
     search_fields = ['name', 'description']
@@ -204,7 +200,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         instance = self.get_object()
-        if request.user.is_authenticated and (request.user.is_staff or request.user is instance.hunter):
+        if False:
             partial = kwargs.pop('partial', True)
             serializer = self.get_serializer(instance, data=request.data, partial=partial)
             serializer.is_valid(raise_exception=True)
@@ -224,7 +220,6 @@ class TokenViewSet(viewsets.ModelViewSet):
     models = models.Token
     queryset = models.objects.order_by('-id')
     serializer_class = serializers.TokenSerializer
-    permission_classes = permissions.AllowAny,
     pagination_class = pagination.Pagination
     filter_backends = [OrderingFilter, SearchFilter]
     search_fields = ['token_address', 'token_symbol']
@@ -261,7 +256,6 @@ class EventViewSet(viewsets.ModelViewSet):
     models = models.Event
     queryset = models.objects.order_by('-event_date_start')
     serializer_class = serializers.EventSerializer
-    permission_classes = permissions.IsAuthenticatedOrReadOnly,
     pagination_class = pagination.Pagination
     filter_backends = [OrderingFilter]
     lookup_field = 'pk'
@@ -312,7 +306,6 @@ class CollectionViewSet(viewsets.ModelViewSet):
     models = models.Collection
     queryset = models.objects.order_by('-id')
     serializer_class = serializers.CollectionSerializer
-    permission_classes = permissions.IsAuthenticatedOrReadOnly,
     pagination_class = pagination.Pagination
     filter_backends = [OrderingFilter]
     lookup_field = 'pk'
@@ -359,24 +352,12 @@ class CollectionViewSet(viewsets.ModelViewSet):
         pass
 
 
-@api_view(['GET'])
-def home(request):
-    return Response({}, status=status.HTTP_200_OK)
-
-
 @api_view(['GET', 'POST'])
 def project_vote(request, id_string):
     project = models.Project.objects.get(id_string=id_string)
     is_voted = False
     if request.method == "POST":
-        if request.user.is_authenticated:
-            is_voted = models.Vote.objects.filter(user=request.user, project=project).first()
-            if is_voted:
-                is_voted.delete()
-                is_voted = False
-            else:
-                models.Vote.objects.create(user=request.user, project=project)
-                is_voted = True
+        pass
     return Response({
         "total": project.votes.count(),
         "is_voted": is_voted
