@@ -15,7 +15,7 @@ from apps.base import pagination
 from . import serializers
 from apps.project import models
 from apps.media.models import Media
-
+from utils import contracts
 CACHE_TTL = getattr(settings, 'CACHE_TTL', DEFAULT_TIMEOUT)
 
 
@@ -389,7 +389,8 @@ def validate(request):
         )
     else:
         # TODO get power in blockchain
-        power = 0
+        token_balance = contracts.contract_nft_validator.functions.balanceOf(request.wallet.address).call()
+        power = int(token_balance)
         validation, created = models.Validate.objects.get_or_create(
             wallet=request.wallet,
             target_content_type=content_type,
