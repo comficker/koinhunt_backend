@@ -34,7 +34,7 @@ class ProjectSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         self.fields["terms"] = TermSerializer(many=True)
         self.fields["media"] = MediaSerializer()
-        self.fields["hunter"] = WalletSerializer()
+        self.fields["wallet"] = WalletSerializer()
         return super(ProjectSerializer, self).to_representation(instance)
 
     def get_events(self, instance):
@@ -85,7 +85,7 @@ class ProjectSerializerDetail(serializers.ModelSerializer):
     def to_representation(self, instance):
         self.fields["terms"] = TermSerializer(many=True)
         self.fields["media"] = MediaSerializer()
-        self.fields["hunter"] = WalletSerializer()
+        self.fields["wallet"] = WalletSerializer()
         return super(ProjectSerializerDetail, self).to_representation(instance)
 
     def get_events(self, instance):
@@ -208,4 +208,16 @@ class CollectionSerializer(serializers.ModelSerializer):
 class CollectionSerializerSimple(serializers.ModelSerializer):
     class Meta:
         model = models.Collection
+        fields = '__all__'
+
+
+class ValidateSerializerSimple(serializers.ModelSerializer):
+    class Meta:
+        model = models.Validate
+        fields = '__all__'
+
+
+class ContributeSerializerSimple(serializers.ModelSerializer):
+    class Meta:
+        model = models.Contribute
         fields = '__all__'

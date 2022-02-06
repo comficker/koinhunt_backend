@@ -20,5 +20,6 @@ from django.conf.urls import include, url
 urlpatterns = [
     url(r'^v1/media/', include(('apps.media.api.urls', 'api_media'))),
     url(r'^v1/project/', include(('apps.project.api.urls', 'api_coin'))),
+    url(r'^v1/auth/', include(('apps.authentication.api.urls', 'api_auth'))),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 

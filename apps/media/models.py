@@ -1,5 +1,5 @@
 from django.db import models
-from apps.base.interface import BaseModel, Taxonomy
+from apps.base.interface import BaseModel
 import os
 import datetime
 from django.core.exceptions import ValidationError

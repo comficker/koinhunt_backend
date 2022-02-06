@@ -11,6 +11,7 @@ router.register(r'collections', views.CollectionViewSet)
 
 urlpatterns = [
     url(r'^', include(router.urls)),
-    url(r'projects/(?P<id_string>[-\w]+)/vote/$', views.project_vote),
     url(r'collections/(?P<pk>[-\w]+)/add/$', views.collection_add),
+    url(r'validate/$', views.validate),
+    url(r'contribute/$', views.contribute),
 ]

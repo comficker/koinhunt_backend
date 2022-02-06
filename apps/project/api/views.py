@@ -5,6 +5,7 @@ from django.db.models import Subquery, OuterRef, F
 from django.core.files.base import ContentFile
 from django.conf import settings
 from django.core.cache.backends.base import DEFAULT_TIMEOUT
+from django.contrib.contenttypes.models import ContentType
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -148,7 +149,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         )
         instance = None
         q = Q(db_status=1)
-        if request.GET.get("validated") != "false":
+        if request.GET.get("validating") != "true":
             q = q & Q(validation_score__gte=1000)
         if request.GET.get("terms__taxonomy"):
             q = q & Q(terms__taxonomy=request.GET.get("terms__taxonomy"))
@@ -199,18 +200,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
     def update(self, request, *args, **kwargs):
-        instance = self.get_object()
-        if False:
-            partial = kwargs.pop('partial', True)
-            serializer = self.get_serializer(instance, data=request.data, partial=partial)
-            serializer.is_valid(raise_exception=True)
-            serializer.save()
-            if getattr(instance, '_prefetched_objects_cache', None):
-                instance._prefetched_objects_cache = {}
-            instance = self.get_object()
-            save_extra(instance, request)
-            return Response(serializer.data)
-        return Response(status=status.HTTP_401_UNAUTHORIZED)
+        pass
 
     def destroy(self, request, *args, **kwargs):
         pass
@@ -332,36 +322,10 @@ class CollectionViewSet(viewsets.ModelViewSet):
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
     def update(self, request, *args, **kwargs):
-        partial = kwargs.pop('partial', True)
-        instance = self.get_object()
-        serializer = self.get_serializer(instance, data=request.data, partial=partial)
-        serializer.is_valid(raise_exception=True)
-        if request.user.id == instance.user.id:
-            serializer.save()
-        else:
-            # Contribute
-            pass
-        if getattr(instance, '_prefetched_objects_cache', None):
-            # If 'prefetch_related' has been applied to a queryset, we need to
-            # forcibly invalidate the prefetch cache on the instance.
-            instance._prefetched_objects_cache = {}
-
-        return Response(serializer.data)
+        pass
 
     def destroy(self, request, *args, **kwargs):
         pass
-
-
-@api_view(['GET', 'POST'])
-def project_vote(request, id_string):
-    project = models.Project.objects.get(id_string=id_string)
-    is_voted = False
-    if request.method == "POST":
-        pass
-    return Response({
-        "total": project.votes.count(),
-        "is_voted": is_voted
-    }, status=status.HTTP_200_OK)
 
 
 @api_view(['POST'])
@@ -379,3 +343,61 @@ def collection_add(request, pk):
     except Exception as e:
         print(e)
         return Response(status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET', 'POST'])
+def contribute(request):
+    target_type = request.GET.get("target_type")
+    target_id = request.GET.get("target_id")
+    content_type = ContentType.objects.get(app_label='project', model=target_type)
+    if request.method == "GET":
+        return Response(
+            serializers.ContributeSerializerSimple(models.Contribute.objects.filter(
+                target_content_type=target_type,
+                target_object_id=target_id
+            ), many=True).data
+        )
+    else:
+        for key in request.body.keys():
+            if not models.Contribute.objects.filter(
+                target_content_type=content_type,
+                target_object_id=target_id,
+                field=key,
+                verified=True,
+            ).exists():
+                models.Contribute.objects.get_or_create(
+                    wallet=request.wallet,
+                    target_content_type=content_type,
+                    target_object_id=target_id,
+                    field=key,
+                    data=request.body.get(key)
+                )
+
+
+@api_view(['GET', 'POST'])
+def validate(request):
+    target_type = request.GET.get("target_type")
+    target_id = request.GET.get("target_id")
+    content_type = ContentType.objects.get(app_label='project', model=target_type)
+    instance = content_type.get_object_for_this_type(id=target_id)
+    if request.method == "GET":
+        return Response(
+            serializers.ValidateSerializerSimple(models.Validate.objects.filter(
+                target_content_type=target_type,
+                target_object_id=target_id
+            ), many=True).data
+        )
+    else:
+        # TODO get power in blockchain
+        power = 0
+        validation, created = models.Validate.objects.get_or_create(
+            wallet=request.wallet,
+            target_content_type=content_type,
+            target_object_id=target_id,
+            defaults={
+                "power": power
+            }
+        )
+        if created:
+            instance.validation_score = instance.validation_score + validation.power
+            instance.save()

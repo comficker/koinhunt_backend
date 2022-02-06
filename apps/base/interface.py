@@ -41,25 +41,9 @@ class HasIDSting(models.Model):
         abstract = True
 
 
-class Taxonomy(models.Model):
-    title = models.CharField(max_length=200)
-    slug = models.CharField(max_length=200, unique=True, blank=True)
-    description = models.CharField(max_length=500, blank=True, null=True)
-
-    def __init__(self, *args, **kwargs):
-        super(Taxonomy, self).__init__(*args, **kwargs)
-        self.original_fields = self.__dict__.copy()
-
-    def save(self, **kwargs):
-        # generate unique slug
-        if hasattr(self, 'slug') and self.id is None and self.slug is None or self.slug == "":
-            unique_slugify(self, self.title)
-        elif self.id is not None and self.slug:
-            unique_slugify(self, self.slug)
-        super(Taxonomy, self).save(**kwargs)
-
-    def __str__(self):
-        return self.title
+class Validation(models.Model):
+    verified = models.BooleanField(default=False)
+    validation_score = models.FloatField(default=0)
 
     class Meta:
         abstract = True
