@@ -1,15 +1,28 @@
 from django.db import models
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
-from apps.base.interface import BaseModel, HasIDSting, Validation
+from apps.base.interface import BaseModel, HasIDString, Validation, BlockChain
 from apps.media.models import Media
 from apps.authentication.models import Wallet
+from apps.governance.models import NFT
+from apps.authentication.models import Wallet
 from django.utils.translation import ugettext_lazy as _
+from django.utils import timezone
+
+
+def default_score():
+    return {
+        "term": 0,
+        "token": 0,
+        "hunt": 0,
+        "validate": 0,
+        "event": 0
+    }
 
 
 # Create your models here.
 
-class Term(BaseModel, HasIDSting):
+class Term(BaseModel, HasIDString):
     meta = models.JSONField(null=True, blank=True)
     name = models.CharField(max_length=200)
     description = models.CharField(max_length=600, blank=True, null=True)
@@ -23,17 +36,67 @@ class Term(BaseModel, HasIDSting):
         unique_together = [['id_string', 'taxonomy']]
 
 
-class Project(BaseModel, HasIDSting, Validation):
+class Token(BaseModel, Validation, BlockChain):
+    meta = models.JSONField(null=True, blank=True)
+    name = models.CharField(max_length=128)
+    description = models.CharField(max_length=600, blank=True, null=True)
+    media = models.ForeignKey(Media, related_name="tokens", on_delete=models.SET_NULL, null=True, blank=True)
+
+    symbol = models.CharField(max_length=42)
+    decimal = models.CharField(max_length=3, default=18)
+    total_supply = models.FloatField(default=0)
+    circulating_supply = models.FloatField(default=0)
+
+    init_price = models.FloatField(default=0)
+    current_price = models.FloatField(default=0)
+
+    tokenomics = models.JSONField(null=True, blank=True)
+    platforms = models.JSONField(null=True, blank=True)
+    short_report = models.JSONField(null=True, blank=True)
+    external_ids = models.JSONField(null=True, blank=True)
+
+    # FOR HUNTER
+    wallet = models.ForeignKey(Wallet, related_name="tokens", null=True, blank=True, on_delete=models.SET_NULL)
+    nft = models.ForeignKey(NFT, related_name="tokens", null=True, blank=True, on_delete=models.SET_NULL)
+
+    time_check = models.DateTimeField(default=timezone.now)
+
+    def fetch_short_report(self):
+        self.short_report = {
+            "market_cap": 856710672222,
+            "market_cap_change_24h": 23843367924,
+            "high_24h": 45406,
+            "low_24h": 43341,
+            "total_volume": 25514855122,
+            "ath": 69045,
+            "ath_change_percentage": -34.56069,
+            "ath_date": "2021-11-10T14:24:11.849Z",
+        }
+
+
+class Project(BaseModel, HasIDString, Validation):
     meta = models.JSONField(null=True, blank=True)
     name = models.CharField(max_length=128)
     description = models.CharField(max_length=600, blank=True, null=True)
     media = models.ForeignKey(Media, related_name="projects", on_delete=models.SET_NULL, null=True, blank=True)
     id_string = models.CharField(max_length=200)
 
-    calculated_score = models.FloatField(default=0)
+    homepage = models.CharField(max_length=128, blank=True)
+    links = models.JSONField(null=True, blank=True)
 
-    terms = models.ManyToManyField(Term, related_name="projects", blank=True)
-    wallet = models.ForeignKey(Wallet, related_name="hunted_projects", on_delete=models.SET_NULL, null=True, blank=True)
+    score_calculated = models.FloatField(default=0)
+    score_detail = models.JSONField(default=default_score)
+
+    terms = models.ManyToManyField(Term, through='ProjectTerm', related_name="projects", blank=True)
+    tokens = models.ManyToManyField(Token, related_name="projects", blank=True)
+    main_token = models.ForeignKey(
+        Token, related_name="main_projects", blank=True, null=True,
+        on_delete=models.SET_NULL
+    )
+
+    # FOR HUNTER
+    wallet = models.ForeignKey(Wallet, related_name="hunted_projects", null=True, blank=True, on_delete=models.SET_NULL)
+    nft = models.ForeignKey(NFT, related_name="hunted_projects", null=True, blank=True, on_delete=models.SET_NULL)
 
     def calculate_launch_date(self):
         last_event = self.project_events.filter(event_name="launch").order_by("-date_start").first()
@@ -42,27 +105,19 @@ class Project(BaseModel, HasIDSting, Validation):
             self.save()
 
 
-class Token(BaseModel, Validation):
+class ProjectTerm(models.Model):
+    project = models.ForeignKey(Project, related_name="project_terms", on_delete=models.CASCADE)
+    term = models.ForeignKey(Term, related_name="project_terms", on_delete=models.CASCADE)
+
     meta = models.JSONField(null=True, blank=True)
-    name = models.CharField(max_length=128)
-    description = models.CharField(max_length=600, blank=True, null=True)
-    media = models.ForeignKey(Media, related_name="tokens", on_delete=models.SET_NULL, null=True, blank=True)
-
-    chain = models.ForeignKey(Term, related_name="tokens", on_delete=models.CASCADE)
-    symbol = models.CharField(max_length=42)
-    address = models.CharField(max_length=42)
-    decimal = models.CharField(max_length=3, default=18)
-    total_supply = models.FloatField(default=0)
-    circulating_supply = models.FloatField(default=0)
-
-    project = models.ForeignKey(Project, related_name="tokens", on_delete=models.CASCADE)
-    wallet = models.ForeignKey(Wallet, related_name="hunted_tokens", on_delete=models.SET_NULL, null=True, blank=True)
 
 
 class Event(BaseModel, Validation):
     class EventNameChoice(models.TextChoices):
         LAUNCH = "launch", _("Launch")
+        LISTING = "listing", _("Listing")
         IDO = "ido", _("Initial DEX Offering")
+        ICO = "ico", _("Initial CEX Offering")
         IEO = "ieo", _("Initial Exchange Offering")
         IGO = "igo", _("Initial Gaming Offering")
         ADD_MEMBER = "add_member", _("Add member")
@@ -82,7 +137,10 @@ class Event(BaseModel, Validation):
 
     project = models.ForeignKey(Project, related_name="project_events", on_delete=models.CASCADE)
     targets = models.ManyToManyField(Project, related_name="target_events", blank=True)
+
+    # FOR HUNTER
     wallet = models.ForeignKey(Wallet, related_name="events", null=True, blank=True, on_delete=models.SET_NULL)
+    nft = models.ForeignKey(NFT, related_name="events", null=True, blank=True, on_delete=models.SET_NULL)
 
 
 class Collection(BaseModel):
@@ -91,12 +149,16 @@ class Collection(BaseModel):
     description = models.CharField(max_length=600, blank=True, null=True)
     media = models.ForeignKey(Media, related_name="collections", on_delete=models.SET_NULL, null=True, blank=True)
 
+    # FOR HUNTER
     wallet = models.ForeignKey(Wallet, related_name="collections", on_delete=models.CASCADE)
     projects = models.ManyToManyField(Project, related_name="collections", blank=True)
 
 
 class Contribute(BaseModel, Validation):
+    # FOR HUNTER
     wallet = models.ForeignKey(Wallet, related_name="contributions", on_delete=models.CASCADE)
+    nft = models.ForeignKey(NFT, related_name="contributions", null=True, blank=True, on_delete=models.SET_NULL)
+
     target_content_type = models.ForeignKey(
         ContentType, related_name='contributions',
         on_delete=models.CASCADE, db_index=True
@@ -110,7 +172,10 @@ class Contribute(BaseModel, Validation):
 
 
 class Validate(BaseModel):
+    # FOR Validator
     wallet = models.ForeignKey(Wallet, related_name="validates", on_delete=models.CASCADE)
+    nft = models.ForeignKey(NFT, related_name="validates", null=True, blank=True, on_delete=models.SET_NULL)
+
     target_content_type = models.ForeignKey(
         ContentType, related_name='validates',
         on_delete=models.CASCADE, db_index=True
@@ -121,3 +186,30 @@ class Validate(BaseModel):
     meta = models.JSONField(null=True, blank=True)
     power = models.FloatField(default=0)
 
+    class Meta:
+        unique_together = ('wallet', 'target_content_type', 'target_object_id')
+
+    def save(self, **kwargs):
+        self.target.get_validation_score()
+        super(Validate, self).save(**kwargs)
+
+
+class TokenPrice(BaseModel):
+    token = models.ForeignKey(Token, related_name="token_prices", on_delete=models.CASCADE)
+    time_check = models.DateTimeField(default=timezone.now)
+    time_open = models.DateTimeField(blank=True, null=True)
+    time_close = models.DateTimeField(blank=True, null=True)
+    supply = models.FloatField(default=0)
+    price_open = models.FloatField(default=0)
+    price_close = models.FloatField(default=0)
+    price_avg = models.FloatField(default=0)
+
+
+class TokenLog(models.Model):
+    token = models.ForeignKey(Token, related_name="token_logs", on_delete=models.CASCADE)
+    time_check = models.DateTimeField(default=timezone.now)
+    field = models.CharField(max_length=50)
+    value = models.JSONField()
+
+# Hunt và Validate bằng NFT Được validate và donate sẽ thăng hạng NFT.
+# Một người được sở hữu nhiều NFT và chọn NFT để hunt hoặc validate

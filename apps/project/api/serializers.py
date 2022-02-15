@@ -22,19 +22,18 @@ class TermSerializer(serializers.ModelSerializer):
 
 class ProjectSerializer(serializers.ModelSerializer):
     id_string = serializers.CharField(required=False)
-    events = serializers.SerializerMethodField()
-    vote = serializers.SerializerMethodField()
     collections = serializers.SerializerMethodField()
 
     class Meta:
         model = models.Project
         fields = '__all__'
-        extra_fields = ["events", "vote", "collections"]
+        extra_fields = ["collections"]
 
     def to_representation(self, instance):
         self.fields["terms"] = TermSerializer(many=True)
         self.fields["media"] = MediaSerializer()
         self.fields["wallet"] = WalletSerializer()
+        self.fields["main_token"] = TokenSerializer()
         return super(ProjectSerializer, self).to_representation(instance)
 
     def get_events(self, instance):
@@ -48,13 +47,6 @@ class ProjectSerializer(serializers.ModelSerializer):
                 many=True
             ).data
         return []
-
-    def get_vote(self, instance):
-        data = {
-            "total": instance.votes.count(),
-            "is_voted": False
-        }
-        return data
 
     def get_field_names(self, declared_fields, info):
         expanded_fields = super(ProjectSerializer, self).get_field_names(declared_fields, info)
@@ -73,7 +65,6 @@ class ProjectSerializerSimple(serializers.ModelSerializer):
 class ProjectSerializerDetail(serializers.ModelSerializer):
     id_string = serializers.CharField(required=False)
     events = serializers.SerializerMethodField()
-    tokens = serializers.SerializerMethodField()
     vote = serializers.SerializerMethodField()
     collections = serializers.SerializerMethodField()
 
@@ -86,12 +77,13 @@ class ProjectSerializerDetail(serializers.ModelSerializer):
         self.fields["terms"] = TermSerializer(many=True)
         self.fields["media"] = MediaSerializer()
         self.fields["wallet"] = WalletSerializer()
+        self.fields["tokens"] = TokenSerializer(many=True)
         return super(ProjectSerializerDetail, self).to_representation(instance)
 
     def get_events(self, instance):
         now = timezone.now()
         return EventSerializerSimple(
-            instance.project_events.annotate(
+            instance.project_events.filter(validation_score__gte=500).annotate(
                 relevance=Case(
                     When(event_date_start__gte=now, then=1),
                     When(event_date_start__lt=now, then=2),
@@ -105,16 +97,11 @@ class ProjectSerializerDetail(serializers.ModelSerializer):
             many=True
         ).data
 
-    def get_tokens(self, instance):
-        return TokenSerializerSimple(instance.tokens.all(), many=True).data
-
     def get_vote(self, instance):
         data = {
-            "total": instance.votes.count(),
+            "total": 0,
             "is_voted": False
         }
-        if self.context.get("request") and self.context['request'].wallet:
-            data["is_voted"] = instance.votes.filter(wallet=self.context['request'].wallet).exists()
         return data
 
     def get_collections(self, instance):
@@ -141,8 +128,6 @@ class TokenSerializer(serializers.ModelSerializer):
         extra_fields = []
 
     def to_representation(self, instance):
-        self.fields["chain"] = TermSerializer()
-        self.fields["project"] = ProjectSerializer()
         return super(TokenSerializer, self).to_representation(instance)
 
 
@@ -153,7 +138,6 @@ class TokenSerializerSimple(serializers.ModelSerializer):
         extra_fields = []
 
     def to_representation(self, instance):
-        self.fields["chain"] = TermSerializer()
         return super(TokenSerializerSimple, self).to_representation(instance)
 
 

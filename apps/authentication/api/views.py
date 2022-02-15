@@ -4,12 +4,12 @@ from rest_framework import viewsets
 from rest_framework.filters import OrderingFilter
 from apps.base import pagination
 from . import serializers
-from apps.project import models
+from apps.project.models import Wallet
 
 
 class WalletViewSet(viewsets.ModelViewSet):
-    models = models.Wallet
-    queryset = models.objects.order_by('-id')
+    models = Wallet
+    queryset = Wallet.objects.order_by('-id')
     serializer_class = serializers.WalletSerializer
     pagination_class = pagination.Pagination
     filter_backends = [OrderingFilter]
@@ -20,13 +20,13 @@ class WalletViewSet(viewsets.ModelViewSet):
         if request.GET.get("type"):
             if request.GET.get("type") == "validator":
                 self.queryset = self.queryset \
-                    .select_related("validates") \
+                    .prefetch_related("validates") \
                     .annotate(total=Count("validates__pk")) \
                     .order_by("-total")
             elif request.GET.get("type") == "hunter":
                 self.queryset = self.queryset\
-                    .select_related("hunted_tokens")\
-                    .annotate(total=Count("hunted_tokens__pk"))\
+                    .prefetch_related("hunted_projects")\
+                    .annotate(total=Count("hunted_projects__pk"))\
                     .order_by("-total")
         queryset = self.filter_queryset(self.queryset.filter(q))
         page = self.paginate_queryset(queryset)

@@ -50,7 +50,7 @@ class MediaManager(models.Manager):
             if ext == '':
                 ext = 'jpg'
                 name = name + '.' + ext
-            if ext in ['jpg', 'jpeg', 'png']:
+            if ext.lower() in ['jpg', 'jpeg', 'png']:
                 temp.flush()
                 img = self.model(
                     title=extra_fields.get("title") if extra_fields.get("title", None) is not None else name

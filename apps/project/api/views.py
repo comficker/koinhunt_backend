@@ -1,7 +1,7 @@
 import base64
 from django.utils import timezone
 from django.db.models import Q, Case, When, IntegerField, DurationField
-from django.db.models import Subquery, OuterRef, F
+from django.db.models import Subquery, OuterRef, F, Prefetch
 from django.core.files.base import ContentFile
 from django.conf import settings
 from django.core.cache.backends.base import DEFAULT_TIMEOUT
@@ -16,6 +16,7 @@ from . import serializers
 from apps.project import models
 from apps.media.models import Media
 from utils import contracts
+
 CACHE_TTL = getattr(settings, 'CACHE_TTL', DEFAULT_TIMEOUT)
 
 
@@ -114,7 +115,7 @@ class TermViewSet(viewsets.ModelViewSet):
 
 class ProjectViewSet(viewsets.ModelViewSet):
     models = models.Project
-    queryset = models.objects.order_by('-calculated_score')
+    queryset = models.objects.order_by('-score_calculated')
     serializer_class = serializers.ProjectSerializer
     pagination_class = pagination.Pagination
     filter_backends = [OrderingFilter, SearchFilter]
@@ -124,10 +125,11 @@ class ProjectViewSet(viewsets.ModelViewSet):
     def retrieve(self, request, *args, **kwargs):
         self.serializer_class = serializers.ProjectSerializerDetail
         self.queryset = models.Project.objects.order_by('-id') \
-            .prefetch_related("tokens").prefetch_related("tokens__chain") \
-            .select_related("hunter").select_related("media") \
+            .prefetch_related("tokens") \
+            .select_related("wallet").select_related("media") \
             .prefetch_related("terms")
         instance = self.get_object()
+        instance.get_validation_score()
         serializer = self.get_serializer(
             instance,
             context={
@@ -137,18 +139,14 @@ class ProjectViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
     def list(self, request, *args, **kwargs):
+        now = timezone.now()
         qs = models.Project.objects \
             .prefetch_related("collections") \
             .prefetch_related("media") \
             .prefetch_related("terms") \
-            .prefetch_related("hunter")
+            .prefetch_related("wallet")
 
-        ev_qs = models.Event.objects.filter(
-            project=OuterRef('pk'),
-            event_date_start__gte=timezone.now()
-        )
-        instance = None
-        q = Q(db_status=1)
+        q = Q(db_status=1, wallet__isnull=False)
         if request.GET.get("validating") != "true":
             q = q & Q(validation_score__gte=1000)
         if request.GET.get("terms__taxonomy"):
@@ -157,13 +155,41 @@ class ProjectViewSet(viewsets.ModelViewSet):
             q = q & Q(terms__id_string=request.GET.get("terms__id_string"))
         if request.GET.get("collection"):
             q = q & Q(collections__id=request.GET.get("collection"))
-        queryset = self.filter_queryset(
-            qs
-                .filter(q)
-                .annotate(event=Subquery(ev_qs.values("event_date_start")[:1]))
-                .order_by('event', '-calculated_score')
-        )
-        # ===========
+        if request.GET.get("hunter"):
+            q = q & Q(wallet_id=request.GET.get("hunter"))
+        if request.GET.get("validator"):
+            ct = ContentType.objects.get(model="project", app_label="project")
+            wl_qs = models.Validate.objects.filter(
+                wallet_id=request.GET.get("validator"),
+                target_content_type=ct
+            ).values_list("target_object_id")
+            q = q & Q(id__in=list(map(lambda x: x[0], wl_qs)))
+        if request.GET.get("terms"):
+            q = q & Q(terms__in=request.GET.get("terms").split(","))
+
+        # =========== Starting query
+        ev_qs = models.Event.objects.annotate(
+            time_diff=Case(
+                When(event_date_start__gte=now, then=F('event_date_start') - now),
+                When(event_date_start__lt=now, then=now - F('event_date_start')),
+                output_field=DurationField(),
+            )).order_by('time_diff')
+        queryset = qs \
+            .filter(q) \
+            .order_by('-id', '-score_calculated') \
+            .prefetch_related(
+                Prefetch(
+                    "project_events",
+                    queryset=ev_qs,
+                )
+            )
+
+        print(queryset.query)
+        for item in queryset:
+            print(item.project_events)
+
+        # =========== Making instance
+        instance = None
         if request.GET.get("terms__taxonomy") and request.GET.get("terms__id_string"):
             instance = serializers.TermSerializer(models.Term.objects.get(
                 taxonomy=request.GET.get("terms__taxonomy"),
@@ -173,6 +199,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
             instance = serializers.CollectionSerializer(
                 models.Collection.objects.get(id=request.GET.get("collection"))
             ).data
+
         # ===========
         page = self.paginate_queryset(queryset)
         if page is not None:
@@ -191,6 +218,9 @@ class ProjectViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
     def create(self, request, *args, **kwargs):
+        if request.wallet is None:
+            return Response(status=status.HTTP_401_UNAUTHORIZED)
+        request.data["wallet"] = request.wallet.id
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
@@ -227,11 +257,12 @@ class TokenViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
     def create(self, request, *args, **kwargs):
+        if request.wallet is None:
+            return Response(status=status.HTTP_401_UNAUTHORIZED)
+        request.data["wallet"] = request.wallet.id
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        serializer.save(
-            hunter=self.request.user
-        )
+        serializer.save()
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
@@ -253,6 +284,8 @@ class EventViewSet(viewsets.ModelViewSet):
     def list(self, request, *args, **kwargs):
         now = timezone.now()
         q = Q()
+        if request.GET.get("validating") != "true":
+            q = q & Q(validation_score__gte=500)
         if request.GET.get("project"):
             q = q & Q(project_id=request.GET.get("project"))
         if request.GET.get("event_name"):
@@ -279,6 +312,9 @@ class EventViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
     def create(self, request, *args, **kwargs):
+        if request.wallet is None:
+            return Response(status=status.HTTP_401_UNAUTHORIZED)
+        request.data["wallet"] = request.wallet.id
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
@@ -314,7 +350,9 @@ class CollectionViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
     def create(self, request, *args, **kwargs):
-        request.data["user"] = request.user.id
+        if request.wallet is None:
+            return Response(status=status.HTTP_401_UNAUTHORIZED)
+        request.data["wallet"] = request.wallet.id
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
@@ -402,3 +440,4 @@ def validate(request):
         if created:
             instance.validation_score = instance.validation_score + validation.power
             instance.save()
+        # TODO check "validation_score" and change "verified" => update instance

@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'apps.authentication',
     'apps.media',
+    'apps.governance',
     'apps.project',
 ]
 
@@ -204,5 +205,6 @@ CORS_ALLOW_HEADERS = [
     "user-agent",
     "x-csrftoken",
     "x-requested-with",
-    "wallet",
+    "signature",
+    "message",
 ]

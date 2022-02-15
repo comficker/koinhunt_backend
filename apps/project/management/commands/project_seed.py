@@ -1,39 +1,11 @@
 import os
-
+from utils.helpers import link_define
 from django.core.management.base import BaseCommand, CommandError
-from apps.project.models import Project, Term, Event
+from apps.project.models import Project, Term, Event, ProjectTerm
 from apps.media.models import Media
 from apps.authentication.models import Wallet
 import json
 import datetime
-
-
-def link_define(url):
-    # []
-    if "facebook" in url:
-        title = "Facebook"
-    elif "twitter" in url:
-        title = "Twitter"
-    elif "telegram" in url:
-        title = "Telegram"
-    elif "t.me" in url:
-        title = "Telegram"
-    elif "youtube" in url:
-        title = "Youtube"
-    elif "tiktok" in url:
-        title = "Tiktok"
-    elif "reddit" in url:
-        title = "Reddit"
-    elif "medium" in url:
-        title = "Medium"
-    elif "discord" in url:
-        title = "Discord"
-    else:
-        title = "Website"
-    return {
-        "url": url,
-        "title": title
-    }
 
 
 class Command(BaseCommand):
@@ -56,9 +28,9 @@ class Command(BaseCommand):
                         name=title,
                         description=description[0:599] if description else None,
                         media=media,
-                        hunter=wallet,
+                        wallet=wallet,
+                        links=links,
                         meta={
-                            "links": links,
                             "features": [],
                             "last_price": 0,
                             "market_cap": 0,
@@ -71,7 +43,11 @@ class Command(BaseCommand):
                         name=term,
                         taxonomy="category"
                     )
-                    project.terms.add(category)
+
+                    ProjectTerm.objects.get_or_create(
+                        term=category,
+                        project=project
+                    )
                     # ADD EVENT
                     try:
                         start_date = datetime.datetime.strptime('3 JANUARY 2022', '%d %B %Y')

@@ -5,7 +5,7 @@ from apps.authentication.models import Wallet
 class WalletSerializer(serializers.ModelSerializer):
     class Meta:
         model = Wallet
-        fields = ['id', 'media', 'bio', 'nick', 'options']
+        fields = ['id', 'media', 'bio', 'nick', 'options', 'address']
 
     def to_representation(self, instance):
         return super(WalletSerializer, self).to_representation(instance)
