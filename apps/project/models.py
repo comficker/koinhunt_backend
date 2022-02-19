@@ -4,10 +4,11 @@ from django.contrib.contenttypes.models import ContentType
 from apps.base.interface import BaseModel, HasIDString, Validation, BlockChain
 from apps.media.models import Media
 from apps.authentication.models import Wallet
-from apps.governance.models import NFT
+from apps.governance.models import NFT, TokenContract
 from apps.authentication.models import Wallet
 from django.utils.translation import ugettext_lazy as _
 from django.utils import timezone
+from django.db.models import Sum
 
 
 def default_score():
@@ -21,7 +22,7 @@ def default_score():
 
 
 # Create your models here.
-
+# ================ FOR PROJECT
 class Term(BaseModel, HasIDString):
     meta = models.JSONField(null=True, blank=True)
     name = models.CharField(max_length=200)
@@ -36,7 +37,7 @@ class Term(BaseModel, HasIDString):
         unique_together = [['id_string', 'taxonomy']]
 
 
-class Token(BaseModel, Validation, BlockChain):
+class Token(BaseModel, BlockChain, Validation):
     meta = models.JSONField(null=True, blank=True)
     name = models.CharField(max_length=128)
     description = models.CharField(max_length=600, blank=True, null=True)
@@ -83,6 +84,7 @@ class Project(BaseModel, HasIDString, Validation):
 
     homepage = models.CharField(max_length=128, blank=True)
     links = models.JSONField(null=True, blank=True)
+    features = models.JSONField(null=True, blank=True)
 
     score_calculated = models.FloatField(default=0)
     score_detail = models.JSONField(default=default_score)
@@ -108,7 +110,6 @@ class Project(BaseModel, HasIDString, Validation):
 class ProjectTerm(models.Model):
     project = models.ForeignKey(Project, related_name="project_terms", on_delete=models.CASCADE)
     term = models.ForeignKey(Term, related_name="project_terms", on_delete=models.CASCADE)
-
     meta = models.JSONField(null=True, blank=True)
 
 
@@ -143,7 +144,7 @@ class Event(BaseModel, Validation):
     nft = models.ForeignKey(NFT, related_name="events", null=True, blank=True, on_delete=models.SET_NULL)
 
 
-class Collection(BaseModel):
+class Collection(BaseModel, Validation):
     meta = models.JSONField(null=True, blank=True)
     name = models.CharField(max_length=128)
     description = models.CharField(max_length=600, blank=True, null=True)
@@ -154,6 +155,7 @@ class Collection(BaseModel):
     projects = models.ManyToManyField(Project, related_name="collections", blank=True)
 
 
+# ================ FOR VALIDATION
 class Contribute(BaseModel, Validation):
     # FOR HUNTER
     wallet = models.ForeignKey(Wallet, related_name="contributions", on_delete=models.CASCADE)
@@ -166,34 +168,54 @@ class Contribute(BaseModel, Validation):
     target_object_id = models.CharField(max_length=128)
     target = GenericForeignKey('target_content_type', 'target_object_id')
 
-    field = models.CharField(max_length=128)
+    field = models.CharField(max_length=128, null=True)
     meta = models.JSONField(null=True, blank=True)
     data = models.JSONField()
+
+    def get_validation_score(self):
+        qs = self.validates.order_by("-power")
+        count = qs.count()
+        if count:
+            self.validation_score = qs.aggregate(total=Sum('power')).get("total")
+            if hasattr(self, 'meta') and self.meta is None:
+                self.meta = {}
+            self.meta["validates"] = list(map(lambda x: {"power": x.power, "wallet": x.wallet.address}, qs[:5]))
+            self.meta["count_validate"] = count
+            self.save()
+            self.target.get_validation_score()
+
+
+class Incentive(BaseModel):
+    name = models.CharField(max_length=128, blank=True, null=True)
+    description = models.CharField(max_length=600, blank=True, null=True)
+
+    contribute = models.ForeignKey(Contribute, related_name='incentives', on_delete=models.CASCADE)
+
+    reward_token = models.ForeignKey(TokenContract, related_name="incentives", on_delete=models.CASCADE)
+    reward_total = models.FloatField(default=0)
+    reward_remain = models.FloatField(default=0)
+
+    power_target = models.FloatField(default=0)
+    due_date = models.DateTimeField(blank=True, null=True)
+    is_active = models.BooleanField(default=False)
 
 
 class Validate(BaseModel):
     # FOR Validator
     wallet = models.ForeignKey(Wallet, related_name="validates", on_delete=models.CASCADE)
     nft = models.ForeignKey(NFT, related_name="validates", null=True, blank=True, on_delete=models.SET_NULL)
-
-    target_content_type = models.ForeignKey(
-        ContentType, related_name='validates',
-        on_delete=models.CASCADE, db_index=True
-    )
-    target_object_id = models.CharField(max_length=128)
-    target = GenericForeignKey('target_content_type', 'target_object_id')
-
-    meta = models.JSONField(null=True, blank=True)
+    contribute = models.ForeignKey(Contribute, related_name='validates', on_delete=models.CASCADE)
     power = models.FloatField(default=0)
 
-    class Meta:
-        unique_together = ('wallet', 'target_content_type', 'target_object_id')
 
-    def save(self, **kwargs):
-        self.target.get_validation_score()
-        super(Validate, self).save(**kwargs)
+class IncentiveDistribution(BaseModel):
+    validate = models.ForeignKey(Validate, related_name="incentive_distributions", on_delete=models.CASCADE)
+    incentive = models.ForeignKey(Incentive, related_name="incentive_distributions", on_delete=models.CASCADE)
+    earned = models.FloatField(default=0)
+    is_claimed = models.BooleanField(default=False)
 
 
+# ================ FOR TOKEN TRACKER
 class TokenPrice(BaseModel):
     token = models.ForeignKey(Token, related_name="token_prices", on_delete=models.CASCADE)
     time_check = models.DateTimeField(default=timezone.now)

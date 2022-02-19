@@ -23,11 +23,13 @@ class TermSerializer(serializers.ModelSerializer):
 class ProjectSerializer(serializers.ModelSerializer):
     id_string = serializers.CharField(required=False)
     collections = serializers.SerializerMethodField()
+    recent = serializers.SerializerMethodField()
 
     class Meta:
         model = models.Project
         fields = '__all__'
-        extra_fields = ["collections"]
+        read_only_fields = ('tokens',)
+        extra_fields = ["collections", "recent"]
 
     def to_representation(self, instance):
         self.fields["terms"] = TermSerializer(many=True)
@@ -54,6 +56,11 @@ class ProjectSerializer(serializers.ModelSerializer):
             return expanded_fields + list(self.Meta.extra_fields)
         else:
             return expanded_fields
+
+    def get_recent(self, instance):
+        if hasattr(instance, "active_prices") and len(instance.active_prices):
+            return EventSerializerSimple(instance.active_prices[0]).data
+        return None
 
 
 class ProjectSerializerSimple(serializers.ModelSerializer):
@@ -93,7 +100,7 @@ class ProjectSerializerDetail(serializers.ModelSerializer):
                     When(event_date_start__gte=now, then=F('event_date_start') - now),
                     When(event_date_start__lt=now, then=now - F('event_date_start')),
                     output_field=DurationField(),
-                )).order_by('relevance', 'time_diff'),
+                )).order_by('relevance', 'time_diff')[:1],
             many=True
         ).data
 

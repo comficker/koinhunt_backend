@@ -21,7 +21,7 @@ class WalletMiddleware(MiddlewareMixin):
             decoded = base64.b64decode(request.headers.get("message"))
             now = datetime.now()
             m_json = json.loads(decoded)
-            if now.timestamp() * 1000 < m_json.get("timestamp") + 60 * 60 * 24 * 7:
+            if now.timestamp() * 1000 < m_json.get("timestamp") + 60 * 60 * 24 * 7 * 1000:
                 signature = request.headers.get("signature")
                 message_hash = defunct_hash_message(text=request.headers.get("message"))
                 address = w3.eth.account.recoverHash(message_hash, signature=signature)

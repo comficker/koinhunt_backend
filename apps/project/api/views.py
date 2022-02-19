@@ -1,4 +1,6 @@
+import os
 import base64
+import json
 from django.utils import timezone
 from django.db.models import Q, Case, When, IntegerField, DurationField
 from django.db.models import Subquery, OuterRef, F, Prefetch
@@ -12,11 +14,14 @@ from rest_framework.response import Response
 from rest_framework import viewsets
 from rest_framework.filters import OrderingFilter, SearchFilter
 from apps.base import pagination
-from . import serializers
 from apps.project import models
 from apps.media.models import Media
-from utils import contracts
+from eth_account.messages import defunct_hash_message
+from web3 import Web3
+from utils.wallets import operators
+from . import serializers
 
+w3 = Web3(Web3.HTTPProvider(os.getenv('RPC_URL')))
 CACHE_TTL = getattr(settings, 'CACHE_TTL', DEFAULT_TIMEOUT)
 
 
@@ -46,9 +51,8 @@ def save_extra(instance, request):
     for raw_token in raw_tokens:
         if raw_token.get("id"):
             continue
-        chain = models.Term.objects.get(pk=raw_token.get("chain"))
         models.Token.objects.get_or_create(
-            chain=chain,
+            chain_id=raw_token.get("chain_id"),
             address=raw_token.get("address"),
             defaults={
                 "project": instance,
@@ -64,10 +68,11 @@ def save_extra(instance, request):
         ext = fm.split('/')[-1]
         file_name = instance.id_string + "." + ext
         data = ContentFile(base64.b64decode(img_str), name=file_name)
-        media = Media.objects.create(
+        media = Media(
             title=request.data.get("name"),
             path=data,
         )
+        media.path.save(file_name, data)
         instance.media = media
     instance.save()
 
@@ -174,19 +179,17 @@ class ProjectViewSet(viewsets.ModelViewSet):
                 When(event_date_start__lt=now, then=now - F('event_date_start')),
                 output_field=DurationField(),
             )).order_by('time_diff')
-        queryset = qs \
-            .filter(q) \
-            .order_by('-id', '-score_calculated') \
-            .prefetch_related(
+        queryset = self.filter_queryset(
+            qs \
+                .filter(q).annotate(event_date_start=Subquery(ev_qs.values("event_date_start")[:1])) \
+                .prefetch_related(
                 Prefetch(
                     "project_events",
                     queryset=ev_qs,
+                    to_attr='active_prices'
                 )
-            )
-
-        print(queryset.query)
-        for item in queryset:
-            print(item.project_events)
+            ).order_by('-event_date_start', '-score_calculated')
+        )
 
         # =========== Making instance
         instance = None
@@ -284,7 +287,9 @@ class EventViewSet(viewsets.ModelViewSet):
     def list(self, request, *args, **kwargs):
         now = timezone.now()
         q = Q()
-        if request.GET.get("validating") != "true":
+        if request.GET.get("validating") == "true":
+            q = q & Q(event_date_start__gt=now)
+        else:
             q = q & Q(validation_score__gte=500)
         if request.GET.get("project"):
             q = q & Q(project_id=request.GET.get("project"))
@@ -303,6 +308,8 @@ class EventViewSet(viewsets.ModelViewSet):
                     output_field=DurationField(),
                 )).order_by('relevance', 'time_diff')
         )
+        if request.GET.get("is_all") != "true":
+            queryset = queryset[:1]
         page = self.paginate_queryset(queryset)
         if page is not None:
             serializer = self.get_serializer(page, many=True)
@@ -414,30 +421,46 @@ def contribute(request):
 
 @api_view(['GET', 'POST'])
 def validate(request):
-    target_type = request.GET.get("target_type")
-    target_id = request.GET.get("target_id")
-    content_type = ContentType.objects.get(app_label='project', model=target_type)
-    instance = content_type.get_object_for_this_type(id=target_id)
+    contrib = request.GET.get("contribute")
     if request.method == "GET":
         return Response(
             serializers.ValidateSerializerSimple(models.Validate.objects.filter(
-                target_content_type=target_type,
-                target_object_id=target_id
+                contribute_id=contrib
             ), many=True).data
         )
     else:
-        # TODO get power in blockchain
-        token_balance = contracts.contract_nft_validator.functions.balanceOf(request.wallet.address).call()
-        power = int(token_balance)
-        validation, created = models.Validate.objects.get_or_create(
-            wallet=request.wallet,
-            target_content_type=content_type,
-            target_object_id=target_id,
-            defaults={
-                "power": power
-            }
-        )
-        if created:
-            instance.validation_score = instance.validation_score + validation.power
-            instance.save()
-        # TODO check "validation_score" and change "verified" => update instance
+        # Tối đa số dự án đc hunt 1 ngày. Khoảng thời gian thời gian tối thiểu giữa các lần hunt hoặc validate;
+        sign_mess = request.data.get("message")
+        signature = request.data.get("signature")
+        message_hash = defunct_hash_message(text=sign_mess)
+        address = w3.eth.account.recoverHash(message_hash, signature=signature)
+        decoded = base64.b64decode(sign_mess)
+        m_json = json.loads(decoded)
+        power = 1
+        if address == request.wallet.address and m_json.get("contrib") and m_json.get("timestamp"):
+            contrib = models.Contribute.objects.get(pk=m_json.get("contrib"))
+            if address in operators.keys():
+                for key in operators.keys():
+                    operator_wallet, _ = models.Wallet.objects.get_or_create(
+                        address=key,
+                        chain="binance-smart-chain"
+                    )
+                    models.Validate.objects.get_or_create(
+                        wallet=operator_wallet,
+                        contribute_id=m_json.get("contrib"),
+                        nft_id=m_json.get("nft") if m_json.get("nft") else None,
+                        defaults={
+                            "power": 500
+                        }
+                    )
+            else:
+                models.Validate.objects.get_or_create(
+                    wallet=request.wallet,
+                    contribute_id=m_json.get("contrib"),
+                    nft_id=m_json.get("nft") if m_json.get("nft") else None,
+                    defaults={
+                        "power": power
+                    }
+                )
+            contrib.get_validation_score()
+            return Response({})

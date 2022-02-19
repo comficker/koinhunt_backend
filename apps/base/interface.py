@@ -46,24 +46,23 @@ class HasIDString(models.Model):
 class Validation(models.Model):
     verified = models.BooleanField(default=False)
     validation_score = models.FloatField(default=0)
+    meta = models.JSONField(null=True, blank=True)
 
     class Meta:
         abstract = True
 
     def get_validation_score(self):
         ct = ContentType.objects.get_for_model(self)
-        qs = ct.validates.filter(target_object_id=self.id).order_by("-power")
+        qs = ct.contributions.filter(
+            target_object_id=self.id,
+        ).order_by('-validation_score')
         count = qs.count()
         if count:
-            self.validation_score = qs.aggregate(total=Sum('power')).get("total")
+            self.validation_score = qs.aggregate(total=Sum('validation_score')).get("total")
             if hasattr(self, 'meta') and self.meta is None:
                 self.meta = {}
-            self.meta["count_validate"] = count
-            self.meta["validates"] = list(map(lambda x: {
-                "power": x.power,
-                "wallet": x.wallet.address
-            }, qs[:5]))
-            self.meta["count_validator"] = qs.count()
+            self.meta["contributions"] = list(map(lambda x: {"wallet": x.wallet.address}, qs[:5]))
+            self.meta["count_contribution"] = count
             self.save()
 
 

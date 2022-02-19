@@ -23,8 +23,9 @@ def validate_file_size(value):
 
 def re_path(instance, filename, bucket):
     now = datetime.datetime.now()
+    ext = filename.split('.')[-1]
     upload_to = '{}/{}/{}/'.format(now.year, now.month, now.day)
-    return os.path.join(upload_to, "{}-{}".format(now.strftime("%s"), instance.title))
+    return os.path.join(upload_to, "{}-{}.{}".format(now.strftime("%s"), instance.title, ext))
 
 
 def path_and_rename(instance, filename):
