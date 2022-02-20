@@ -1,4 +1,6 @@
 import random
+import time
+
 import requests
 from apps.project.models import Token, TokenPrice, Project, Term, ProjectTerm, TokenLog, Event, Wallet
 from datetime import datetime, timezone
@@ -88,6 +90,7 @@ def fetch_token_market_chart(token, token_id, fr, to):
     if token is None:
         token = Token.objects.get(external_ids__coingecko=token_id)
     temp = 0
+    time.sleep(1)
     for item in data["prices"]:
         TokenPrice.objects.get_or_create(
             token=token,
