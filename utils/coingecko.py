@@ -86,21 +86,24 @@ def fetch_token_market_chart(token, token_id, fr, to):
         "from": fr,
         "to": to,
     })
-    data = req.json()
-    if token is None:
-        token = Token.objects.get(external_ids__coingecko=token_id)
-    temp = 0
-    time.sleep(1)
-    for item in data["prices"]:
-        TokenPrice.objects.get_or_create(
-            token=token,
-            time_check=datetime.fromtimestamp(item[0] / 1000, timezone.utc),
-            defaults={
-                "price_open": item[1],
-                "price_close": item[1],
-                "price_avg": item[1],
-            }
-        )
+    try:
+        data = req.json()
+        if token is None:
+            token = Token.objects.get(external_ids__coingecko=token_id)
+        temp = 0
+        time.sleep(3)
+        for item in data["prices"]:
+            TokenPrice.objects.get_or_create(
+                token=token,
+                time_check=datetime.fromtimestamp(item[0] / 1000, timezone.utc),
+                defaults={
+                    "price_open": item[1],
+                    "price_close": item[1],
+                    "price_avg": item[1],
+                }
+            )
+    except Exception as e:
+        print(e)
 
 
 def fetch_token(token_id):
