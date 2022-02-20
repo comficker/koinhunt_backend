@@ -18,4 +18,4 @@ contract_nft_validator = w3.eth.contract(address=Web3.toChecksumAddress(os.geten
 #    100   |   1000  |   2000  |  3000   |  4000   |    5000
 #    0     |    1    |    2    |    3    |    4    |    5
 def get_power(validation):
-    return REWARD_BASE
+    return 100
