@@ -13,9 +13,6 @@ yarn-error.log
 *.rar
 .editorconfig
 .env
-**/migrations/*
-!**/migrations
-!**/migrations/__init__.py
 virtualenv
 venv
 *Copy
