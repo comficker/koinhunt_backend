@@ -206,7 +206,10 @@ def fetch_token(token_id):
         for ticker in data["tickers"]:
             market, _ = Project.objects.get_or_create(
                 id_string=ticker["market"]["identifier"],
-                name=ticker["market"]["name"]
+                name=ticker["market"]["name"],
+                defaults={
+                    "wallet": wallet
+                }
             )
             if not Event.objects.filter(
                 project=project,

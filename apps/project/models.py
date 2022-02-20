@@ -173,16 +173,16 @@ class Contribute(BaseModel, Validation):
     data = models.JSONField()
 
     def get_validation_score(self):
-        qs = self.validates.order_by("-power")
-        count = qs.count()
-        if count:
-            self.validation_score = qs.aggregate(total=Sum('power')).get("total")
-            if hasattr(self, 'meta') and self.meta is None:
-                self.meta = {}
-            self.meta["validates"] = list(map(lambda x: {"power": x.power, "wallet": x.wallet.address}, qs[:5]))
-            self.meta["count_validate"] = count
-            self.save()
-            self.target.get_validation_score()
+        validates = self.validates.order_by("-power")
+        count = validates.count()
+        self.validation_score = validates.aggregate(total=Sum('power')).get("total") or 0
+        if hasattr(self, 'meta') and self.meta is None:
+            self.meta = {}
+        self.meta["validates"] = list(map(lambda x: {"power": x.power, "wallet": x.wallet.address}, validates[:5]))
+        self.meta["count_validate"] = count
+
+        self.save()
+        self.target.get_validation_score()
 
 
 class Incentive(BaseModel):

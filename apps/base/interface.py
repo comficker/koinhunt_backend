@@ -1,9 +1,12 @@
+import os
 from django.db import models
 from utils.slug import unique_slugify
 from django.utils import timezone
 from django.utils.translation import ugettext_lazy as _
 from django.contrib.contenttypes.models import ContentType
-from django.db.models import Sum
+from django.db.models import Sum, Count
+
+REWARD_BASE = float(os.getenv("REWARD_BASE", "0"))
 
 
 class BaseModel(models.Model):
@@ -19,12 +22,6 @@ class BaseModel(models.Model):
 
     class Meta:
         abstract = True
-
-    def save(self, **kwargs):
-        # generate unique slug
-        self.created = timezone.now()
-        self.updated = timezone.now()
-        super(BaseModel, self).save(**kwargs)
 
 
 class HasIDString(models.Model):
@@ -46,6 +43,8 @@ class HasIDString(models.Model):
 class Validation(models.Model):
     verified = models.BooleanField(default=False)
     validation_score = models.FloatField(default=0)
+    init_power_target = models.FloatField(default=REWARD_BASE * 100)
+    score_detail = models.JSONField(default=dict, null=True, blank=True)
     meta = models.JSONField(null=True, blank=True)
 
     class Meta:
@@ -53,17 +52,28 @@ class Validation(models.Model):
 
     def get_validation_score(self):
         ct = ContentType.objects.get_for_model(self)
-        qs = ct.contributions.filter(
+        contributions = ct.contributions.filter(
             target_object_id=self.id,
         ).order_by('-validation_score')
-        count = qs.count()
-        if count:
-            self.validation_score = qs.aggregate(total=Sum('validation_score')).get("total")
-            if hasattr(self, 'meta') and self.meta is None:
-                self.meta = {}
-            self.meta["contributions"] = list(map(lambda x: {"wallet": x.wallet.address}, qs[:5]))
-            self.meta["count_contribution"] = count
-            self.save()
+        count = contributions.count()
+        self.validation_score = contributions.aggregate(total=Sum('validation_score')).get("total", 0)
+        if hasattr(self, 'meta') and self.meta is None:
+            self.meta = {}
+        self.meta["contributions"] = list(map(lambda x: {
+            "wallet": x.wallet.address,
+            "validation_score": x.validation_score
+        }, contributions[:5]))
+        init_contrib = contributions.filter(field="INIT").first()
+        if init_contrib:
+            self.meta["validations"] = list(map(lambda x: {
+                "wallet": x.wallet.address,
+                "power": x.power
+            }, init_contrib.validates.order_by("-id")[:5]))
+        self.meta["count_contribution"] = count
+        self.meta["count_validation"] = contributions.annotate(count=Count('validates')) \
+            .aggregate(total=Sum("count")) \
+            .get("total")
+        self.save()
 
 
 class BlockChain(models.Model):

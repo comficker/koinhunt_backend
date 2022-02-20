@@ -7,7 +7,8 @@ from apps.project.models import Event, Token, Project, Incentive, Contribute, Va
 from django.contrib.contenttypes.models import ContentType
 from utils.contracts import get_power
 from django.utils import timezone
-from django.db.models import Sum
+
+REWARD_BASE = float(os.getenv("REWARD_BASE", "0"))
 
 
 def get_token_reward():
@@ -31,10 +32,11 @@ def make_init_contrib(instance):
         field="INIT",
         data={}
     )
-    reward = int(os.getenv("REWARD_BASE"))
-    power_target = float(os.getenv("REWARD_POWER"))
-    if instance is Project:
-        power_target = 3 * float(os.getenv("REWARD_POWER"))
+    reward = REWARD_BASE
+    power_target = REWARD_BASE * 100
+    if type(instance) is Project:
+        reward = 5 * reward
+        power_target = 5 * power_target
     Incentive.objects.create(
         contribute=contrib,
         reward_token=get_token_reward(),
@@ -47,13 +49,46 @@ def make_init_contrib(instance):
         contribute=contrib,
         wallet=instance.wallet,
         nft=instance.nft,
-        power=get_power(instance)
+        power=get_power(instance) * 1.5
     )
-
+    instance.refresh_from_db()
     if instance.meta is None:
         instance.meta = {}
     instance.meta["contrib"] = contrib.id
+    instance.meta["contrib_reward"] = REWARD_BASE
+    instance.init_power_target = power_target
     instance.save()
+
+
+def check_contrib(instance):
+    power_target_current = instance.target.validation_score
+    for incentive in instance.incentives.filter(is_active=True, reward_total__gt=0):
+        power_target = 0
+        is_distributing = False
+        if incentive.due_date and incentive.due_date >= timezone.now():
+            if incentive.power_target == 0:
+                power_target = power_target_current
+            else:
+                power_target = incentive.power_target
+            is_distributing = True
+        elif power_target_current >= incentive.power_target:
+            power_target = incentive.power_target
+            is_distributing = True
+        if is_distributing:
+            for validate in instance.validates.all():
+                p = validate.power / power_target
+                IncentiveDistribution.objects.create(
+                    validate=validate,
+                    incentive=incentive,
+                    earned=p * incentive.reward_total
+                )
+            incentive.is_active = False
+            incentive.save()
+            if not instance.verified and instance.field == "INIT":
+                instance.verified = True
+                instance.target.verified = True
+                instance.save()
+                instance.target.save()
 
 
 @receiver(post_save, sender=Project)
@@ -74,18 +109,14 @@ def on_token_post_save(sender, instance, created, *args, **kwargs):
         make_init_contrib(instance)
 
 
-@receiver(post_save, sender=Contribute)
-def on_contrib_post_save(sender, instance, created, *args, **kwargs):
-    if not created:
-        for incentive in instance.incentives.filter(is_active=True, reward_total__gt=0):
-            power_target = incentive.power_target
-            if incentive.due_date and incentive.due_date >= timezone.now():
-                power_target = instance.validation_score
-            if power_target > 0:
-                for validate in instance.validates.all():
-                    p = instance.power / power_target
-                    IncentiveDistribution.objects.create(
-                        validate=validate,
-                        incentive=incentive,
-                        earned=p * incentive.reward_total
-                    )
+@receiver(post_save, sender=Validate)
+def on_validate_post_save(sender, instance, created, *args, **kwargs):
+    if created:
+        instance.contribute.get_validation_score()
+        check_contrib(instance.contribute)
+        contrib = instance.contribute
+        contrib.score_detail[instance.wallet.id] = instance.power
+        contrib.save()
+        target = contrib.target
+        target.score_detail[instance.wallet.id] = instance.power
+        target.save()

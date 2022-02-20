@@ -28,7 +28,7 @@ class ProjectSerializer(serializers.ModelSerializer):
     class Meta:
         model = models.Project
         fields = '__all__'
-        read_only_fields = ('tokens',)
+        read_only_fields = ('tokens', 'score_detail')
         extra_fields = ["collections", "recent"]
 
     def to_representation(self, instance):
@@ -72,13 +72,13 @@ class ProjectSerializerSimple(serializers.ModelSerializer):
 class ProjectSerializerDetail(serializers.ModelSerializer):
     id_string = serializers.CharField(required=False)
     events = serializers.SerializerMethodField()
-    vote = serializers.SerializerMethodField()
+    my_score = serializers.SerializerMethodField()
     collections = serializers.SerializerMethodField()
 
     class Meta:
         model = models.Project
         fields = '__all__'
-        extra_fields = ["events", "vote", "collections"]
+        extra_fields = ["events", "my_score", "collections"]
 
     def to_representation(self, instance):
         self.fields["terms"] = TermSerializer(many=True)
@@ -104,12 +104,11 @@ class ProjectSerializerDetail(serializers.ModelSerializer):
             many=True
         ).data
 
-    def get_vote(self, instance):
-        data = {
-            "total": 0,
-            "is_voted": False
-        }
-        return data
+    def get_my_score(self, instance):
+        request = self.context.get("request")
+        if request and request.wallet:
+            return instance.score_detail.get(str(request.wallet.id), None)
+        return 0
 
     def get_collections(self, instance):
         request = self.context.get("request")
@@ -149,15 +148,31 @@ class TokenSerializerSimple(serializers.ModelSerializer):
 
 
 class EventSerializer(serializers.ModelSerializer):
+    my_score = serializers.SerializerMethodField()
+
     class Meta:
         model = models.Event
         fields = '__all__'
-        extra_fields = []
+        extra_fields = ["my_score"]
+        read_only_fields = ('score_detail',)
 
     def to_representation(self, instance):
         self.fields["targets"] = ProjectSerializer(many=True)
         self.fields["project"] = ProjectSerializer()
         return super(EventSerializer, self).to_representation(instance)
+
+    def get_my_score(self, instance):
+        request = self.context.get("request")
+        if request and request.wallet and instance.score_detail:
+            return instance.score_detail.get(str(request.wallet.id), None)
+        return 0
+
+    def get_field_names(self, declared_fields, info):
+        expanded_fields = super(EventSerializer, self).get_field_names(declared_fields, info)
+        if getattr(self.Meta, 'extra_fields', None) and len(self.Meta.extra_fields) > 0:
+            return expanded_fields + list(self.Meta.extra_fields)
+        else:
+            return expanded_fields
 
 
 class EventSerializerSimple(serializers.ModelSerializer):

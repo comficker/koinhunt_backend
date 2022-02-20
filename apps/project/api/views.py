@@ -23,6 +23,7 @@ from . import serializers
 
 w3 = Web3(Web3.HTTPProvider(os.getenv('RPC_URL')))
 CACHE_TTL = getattr(settings, 'CACHE_TTL', DEFAULT_TIMEOUT)
+REWARD_BASE = float(os.getenv("REWARD_BASE", "0"))
 
 
 def save_extra(instance, request):
@@ -134,7 +135,6 @@ class ProjectViewSet(viewsets.ModelViewSet):
             .select_related("wallet").select_related("media") \
             .prefetch_related("terms")
         instance = self.get_object()
-        instance.get_validation_score()
         serializer = self.get_serializer(
             instance,
             context={
@@ -153,7 +153,9 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
         q = Q(db_status=1, wallet__isnull=False)
         if request.GET.get("validating") != "true":
-            q = q & Q(validation_score__gte=1000)
+            q = q & Q(validation_score__gte=F("init_power_target"))
+        elif request.GET.get("validating") != "false":
+            q = q & Q(validation_score__lt=F("init_power_target"))
         if request.GET.get("terms__taxonomy"):
             q = q & Q(terms__taxonomy=request.GET.get("terms__taxonomy"))
         if request.GET.get("terms__id_string"):
@@ -288,9 +290,10 @@ class EventViewSet(viewsets.ModelViewSet):
         now = timezone.now()
         q = Q()
         if request.GET.get("validating") == "true":
-            q = q & Q(event_date_start__gt=now)
+            q = q & (Q(event_date_start__gt=now) | Q(event_date_start__isnull=True))
+            q = q & Q(verified=False)
         else:
-            q = q & Q(validation_score__gte=500)
+            q = q & Q(validation_score__gte=REWARD_BASE * 100)
         if request.GET.get("project"):
             q = q & Q(project_id=request.GET.get("project"))
         if request.GET.get("event_name"):
@@ -315,7 +318,9 @@ class EventViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(page, many=True)
             return self.get_paginated_response(serializer.data)
 
-        serializer = self.get_serializer(queryset, many=True)
+        serializer = self.get_serializer(queryset, many=True, context={
+            'request': request,
+        })
         return Response(serializer.data)
 
     def create(self, request, *args, **kwargs):
@@ -438,7 +443,6 @@ def validate(request):
         m_json = json.loads(decoded)
         power = 1
         if address == request.wallet.address and m_json.get("contrib") and m_json.get("timestamp"):
-            contrib = models.Contribute.objects.get(pk=m_json.get("contrib"))
             if address in operators.keys():
                 for key in operators.keys():
                     operator_wallet, _ = models.Wallet.objects.get_or_create(
@@ -462,5 +466,4 @@ def validate(request):
                         "power": power
                     }
                 )
-            contrib.get_validation_score()
             return Response({})
