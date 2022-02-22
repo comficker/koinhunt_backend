@@ -12,4 +12,5 @@ parameters = pika.ConnectionParameters(
 QUEUEConnection = pika.BlockingConnection(parameters)
 channel = QUEUEConnection.channel()
 channel.queue_declare(queue=os.getenv("QUEUE_CGK_PRICE"))
+channel.queue_declare(queue=os.getenv("QUEUE_CGK_TOKEN"))
 

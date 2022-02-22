@@ -29,7 +29,6 @@ CHAIN_MAPPING = {
                        "Ether is the native cryptocurrency of the platform."
     }
 }
-
 ONE_DAY = 86400
 
 
@@ -72,10 +71,12 @@ def clean_short_report(market_data):
     return market_data
 
 
+# ======================== HANDLE ======
 def handle_data_token(data, wallet):
-    if data.get("asset_platform_id") is None or data["platforms"][data["asset_platform_id"]] == "" or data["image"][
-        "large"] == "missing_large.png" or data["symbol"] is None or len(data["symbol"]) > 42:
+    if data.get("asset_platform_id") is None or data["symbol"] is None or len(data["symbol"]) > 42:
         return None
+    if data["platforms"][data["asset_platform_id"]] == "" or data["image"]["large"] == "missing_large.png":
+        return
     token = Token.objects.filter(
         chain_id=data["asset_platform_id"],
         address=data["platforms"][data.get("asset_platform_id")]
@@ -238,42 +239,21 @@ def handle_data_token_price(data, token):
         )
 
 
-def fetch_token_market_chart(token, token_id, fr, to):
-    # NON_RANGE
-    # Get historical market data include price, market cap, and 24h volume (granularity auto)
-    # Minutely data will be used for duration within 1 day,
-    # Hourly data will be used for duration between 1 day and 90 days,
-    # Daily data will be used for duration above 90 days.
-
-    # RANGE
-    # Get historical market data include price, market cap, and 24h volume within a range of timestamp
-    # Data granularity is automatic (cannot be adjusted)
-    # 1 day from query time = 5 minute interval data
-    # 1 - 90 days from query time = hourly data
-    # above 90 days from query time = daily data (00:00 UTC)
-    req = requests.get("https://api.coingecko.com/api/v3/coins/{}/market_chart/range".format(token_id), params={
-        "vs_currency": "usd",
-        "from": fr,
-        "to": to,
-    })
-    try:
-        if token is None:
-            token = Token.objects.get(external_ids__coingecko=token_id)
-        handle_data_token_price(req.json(), token)
-    except Exception as e:
-        print(e)
+def handle_queue_rabbitmq(ch, method, properties, body):
+    data = json.loads(body)
+    if method.encode()[7].decode("utf-8") == os.getenv("QUEUE_CGK_TOKEN"):
+        wallet, _ = Wallet.objects.get_or_create(
+            address=random.choice(list(operators.keys())),
+            chain="binance-smart-chain"
+        )
+        handle_data_token(data, wallet)
+    elif method.encode()[7].decode("utf-8") == os.getenv("QUEUE_CGK_PRICE"):
+        token = Token.objects.filter(external_ids__coingecko=data.get("token_id")).first()
+        if token:
+            handle_data_token_price(data, token)
 
 
-def fetch_token(token_id):
-    url = "https://api.coingecko.com/api/v3/coins/{}".format(token_id)
-    req = requests.get(url)
-    wallet, _ = Wallet.objects.get_or_create(
-        address=random.choice(list(operators.keys())),
-        chain="binance-smart-chain"
-    )
-    handle_data_token(req.json(), wallet)
-
-
+# ======================== FETCH ======
 def fetch_cgk(break_wallet=None, enable_detail=True, enable_ranges=None, push_file=False, push_mq=False):
     if enable_ranges is None:
         enable_ranges = [1, 90, 180]
@@ -308,8 +288,32 @@ def fetch_cgk(break_wallet=None, enable_detail=True, enable_ranges=None, push_fi
                 "detail": "https://api.coingecko.com/api/v3/coins/{}".format(coin["id"]),
                 "chart": "https://api.coingecko.com/api/v3/coins/{}/market_chart/range".format(coin["id"]),
             }
+            # ======================= SEND TOKEN
+            if not enable_detail:
+                continue
+            while True:
+                try:
+                    req = requests.get(urls["detail"])
+                    coin_data = req.json()
+                    if push_file:
+                        with open("{path_token}/{timestamp}.json".format(
+                            path_token=path_token,
+                            timestamp=datetime.now().timestamp()
+                        ), "w") as f:
+                            json.dump(coin_data, f, ensure_ascii=False, indent=2)
+                    if push_mq and os.getenv("QUEUE_CGK_TOKEN"):
+                        channel.basic_publish(
+                            exchange='',
+                            routing_key=os.getenv("QUEUE_CGK_TOKEN"),
+                            body=json.dumps(coin_data).encode("utf-8")
+                        )
+                    break
 
-            # =======================
+                except Exception as e:
+                    time.sleep(5)
+                    print(e)
+                    continue
+            # ======================= SEND_PRICE
             data_ranges = [
                 {"range": 180, "fr": now - ONE_DAY * 180, "to": now - ONE_DAY * 90},
                 {"range": 90, "fr": now - ONE_DAY * 90, "to": now - ONE_DAY},
@@ -342,8 +346,8 @@ def fetch_cgk(break_wallet=None, enable_detail=True, enable_ranges=None, push_fi
                                     exchange='',
                                     routing_key=os.getenv("QUEUE_CGK_PRICE"),
                                     body=json.dumps({
+                                        **coin_data_price,
                                         "token_id": coin["id"],
-                                        "prices": coin_data_price
                                     }).encode("utf-8")
                                 )
                             break
@@ -351,32 +355,9 @@ def fetch_cgk(break_wallet=None, enable_detail=True, enable_ranges=None, push_fi
                             time.sleep(5)
                             print(e)
                             continue
-            # =======================
-            if not enable_detail:
-                continue
-            while True:
-                try:
-                    req = requests.get(urls["detail"])
-                    coin_data = req.json()
-                    if push_file:
-                        with open("{path_token}/{timestamp}.json".format(
-                            path_token=path_token,
-                            timestamp=datetime.now().timestamp()
-                        ), "w") as f:
-                            json.dump(coin_data, f, ensure_ascii=False, indent=2)
-                    if push_mq and os.getenv("QUEUE_CGK_TOKEN"):
-                        channel.basic_publish(
-                            exchange='',
-                            routing_key=os.getenv("QUEUE_CGK_TOKEN"),
-                            body=json.dumps(coin_data).encode("utf-8")
-                        )
-                    break
 
-                except Exception as e:
-                    time.sleep(5)
-                    print(e)
-                    continue
 
+# ======================== READ ======
 
 def read_data_local():
     index = 0
@@ -410,14 +391,10 @@ def read_data_local():
                             exchange='',
                             routing_key=os.getenv("QUEUE_CGK_PRICE"),
                             body=json.dumps({
+                                **json.loads(j.read()),
                                 "token_id": dir_name,
-                                "prices": json.loads(j.read())
                             }).encode("utf-8")
                         )
         index = index + 1
-        if index == 6:
+        if index == 12:
             break
-
-
-def handle_queue_rabbitmq(ch, method, properties, data):
-    print(data)
