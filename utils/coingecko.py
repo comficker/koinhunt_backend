@@ -396,5 +396,4 @@ def read_data_local():
                             }).encode("utf-8")
                         )
         index = index + 1
-        if index == 12:
-            break
+        print(index)

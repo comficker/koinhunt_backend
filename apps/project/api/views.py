@@ -156,6 +156,10 @@ class ProjectViewSet(viewsets.ModelViewSet):
             q = q & Q(validation_score__gte=F("init_power_target"))
         elif request.GET.get("validating") != "false":
             q = q & Q(validation_score__lt=F("init_power_target"))
+            if request.wallet and request.wallet.address == "0x007307FB47F9DbAA694C474dB8C7c43Fad6258D5":
+                q = q & Q(media__isnull=True)
+            else:
+                q = q & Q(media__isnull=False)
         if request.GET.get("terms__taxonomy"):
             q = q & Q(terms__taxonomy=request.GET.get("terms__taxonomy"))
         if request.GET.get("terms__id_string"):
