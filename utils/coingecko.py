@@ -1,10 +1,12 @@
 import random
 import time
-
+import os
+import json
 import requests
 from apps.project.models import Token, TokenPrice, Project, Term, ProjectTerm, TokenLog, Event, Wallet
 from datetime import datetime, timezone
 from apps.media.models import Media
+from apps.base.rabbitmq import channel
 from utils.helpers import link_define
 from utils.wallets import operators
 
@@ -27,6 +29,8 @@ CHAIN_MAPPING = {
                        "Ether is the native cryptocurrency of the platform."
     }
 }
+
+ONE_DAY = 86400
 
 
 def extract_links(links):
@@ -68,54 +72,9 @@ def clean_short_report(market_data):
     return market_data
 
 
-def fetch_token_market_chart(token, token_id, fr, to):
-    # NON_RANGE
-    # Get historical market data include price, market cap, and 24h volume (granularity auto)
-    # Minutely data will be used for duration within 1 day,
-    # Hourly data will be used for duration between 1 day and 90 days,
-    # Daily data will be used for duration above 90 days.
-
-    # RANGE
-    # Get historical market data include price, market cap, and 24h volume within a range of timestamp
-    # Data granularity is automatic (cannot be adjusted)
-    # 1 day from query time = 5 minute interval data
-    # 1 - 90 days from query time = hourly data
-    # above 90 days from query time = daily data (00:00 UTC)
-    req = requests.get("https://api.coingecko.com/api/v3/coins/{}/market_chart/range".format(token_id), params={
-        "vs_currency": "usd",
-        "from": fr,
-        "to": to,
-    })
-    try:
-        data = req.json()
-        if token is None:
-            token = Token.objects.get(external_ids__coingecko=token_id)
-        temp = 0
-        time.sleep(3)
-        for item in data["prices"]:
-            TokenPrice.objects.get_or_create(
-                token=token,
-                time_check=datetime.fromtimestamp(item[0] / 1000, timezone.utc),
-                defaults={
-                    "price_open": item[1],
-                    "price_close": item[1],
-                    "price_avg": item[1],
-                }
-            )
-    except Exception as e:
-        print(e)
-
-
-def fetch_token(token_id):
-    url = "https://api.coingecko.com/api/v3/coins/{}".format(token_id)
-    req = requests.get(url)
-    wallet, _ = Wallet.objects.get_or_create(
-        address=random.choice(list(operators.keys())),
-        chain="binance-smart-chain"
-    )
-    data = req.json()
-    if data.get("asset_platform_id") is None or data["platforms"][data["asset_platform_id"]] == "" or data["image"]["large"] == "missing_large.png" \
-        or data["symbol"] is None or len(data["symbol"]) > 42:
+def handle_data_token(data, wallet):
+    if data.get("asset_platform_id") is None or data["platforms"][data["asset_platform_id"]] == "" or data["image"][
+        "large"] == "missing_large.png" or data["symbol"] is None or len(data["symbol"]) > 42:
         return None
     token = Token.objects.filter(
         chain_id=data["asset_platform_id"],
@@ -133,7 +92,8 @@ def fetch_token(token_id):
             description=data["description"]["en"][:300],
             media=media,
             total_supply=data["market_data"]["total_supply"] if data["market_data"]["total_supply"] else 0,
-            circulating_supply=data["market_data"]["circulating_supply"] if data["market_data"]["circulating_supply"] else 0,
+            circulating_supply=data["market_data"]["circulating_supply"] if data["market_data"][
+                "circulating_supply"] else 0,
             current_price=data["market_data"]["current_price"].get("usd", 0),
             init_price=short_report.get("atl", 0),
             short_report=short_report,
@@ -201,6 +161,10 @@ def fetch_token(token_id):
                         }
                     )
     else:
+        if token.external_ids is None:
+            token.external_ids = {}
+        if not token.external_ids.get("coingecko"):
+            token.external_ids["coingecko"] = data["id"]
         token.short_report = short_report
         token.current_price = short_report.get("current_price", 0)
         token.save()
@@ -261,131 +225,199 @@ def fetch_token(token_id):
     return token
 
 
-x = {
-    "id": "step-hero",
-    "symbol": "hero",
-    "name": "Step Hero",
-    "asset_platform_id": "ethereum",
-    "platforms": {
-        "ethereum": "0xa2881f7f441267042f9778ffa0d4f834693426be",
-        "binance-smart-chain": "0x284ac5af363bde6ef5296036af8fb0e9cc347b41"
-    },
-    "categories": [
-        "Music",
-        "Non-Fungible Tokens (NFT)",
-        "Binance Smart Chain Ecosystem"
-    ],
-    "description": {
-        "en": "Step Hero ecosystem is the perfect combination of NFT gaming and DeFi that "
-              "enables users to have fun and earn profit simultaneously. "
-              "The comprehensive ecosystem comprises Step Hero RPG game, Heroes Farming, and NFT Marketplace. "
-              "More than a game, Step Hero also has a strong community "
-              "helping players on investing activites to earn money from game."
-    },
-    "links": {
-        "homepage": [
-            "https://stephero.io/",
-            "",
-            ""
-        ],
-        "blockchain_site": [
-            "https://bscscan.com/token/0xE8176d414560cFE1Bf82Fd73B986823B89E4F545",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-            ""
-        ],
-        "official_forum_url": [
-            "",
-            "",
-            ""
-        ],
-        "chat_url": [
-            "https://www.facebook.com/StepHeroNFTs",
-            "https://discord.com/invite/A5guPpQcdu",
-            ""
-        ],
-        "announcement_url": [
-            "https://stephero.medium.com/",
-            ""
-        ],
-        "twitter_screen_name": "StepHeroNFTs",
-        "facebook_username": "",
-        "telegram_channel_identifier": "stephero_chat",
-        "subreddit_url": "https://www.reddit.com/r/StepHero/",
-        "repos_url": {
-            "github": [],
-            "bitbucket": []
-        }
-    },
-    "image": {
-        "large": "https://assets.coingecko.com/coins/images/17700/large/stephero.PNG?1629072670"
-    },
-    "contract_address": "0xe8176d414560cfe1bf82fd73b986823b89e4f545",
-    "market_data": {
-        "current_price": {
-            "usd": 0.089745,
-        },
-        "ath": {
-            "usd": 3.14,
-        },
-        "ath_date": {
-            "usd": "2021-08-26T01:42:29.038Z",
-        },
-        "market_cap_rank": None,
-        "fully_diluted_valuation": {},
-        "total_volume": {
-            "usd": 27674,
-        },
-        "high_24h": {
-            "usd": 0.099119,
-        },
-        "low_24h": {
-            "usd": 0.088258,
-        },
-        "price_change_24h": -0.00835868861,
-        "price_change_percentage_24h": -8.5203,
-        "price_change_percentage_7d": -11.17947,
-        "price_change_percentage_14d": -22.70633,
-        "price_change_percentage_30d": -60.72447,
-        "price_change_percentage_60d": -84.70042,
-        "price_change_percentage_200d": 0.0,
-        "price_change_percentage_1y": 0.0,
-        "market_cap_change_24h": 0.0,
-        "market_cap_change_percentage_24h": 0.0,
-        "total_supply": 100000000.0,
-        "max_supply": None,
-        "circulating_supply": 0.0,
-        "last_updated": "2022-02-11T17:00:39.788Z"
-    },
-    "community_data": {
-        "facebook_likes": None,
-        "twitter_followers": 266251,
-        "reddit_average_posts_48h": 0.0,
-        "reddit_average_comments_48h": 0.0,
-        "reddit_subscribers": 197,
-        "reddit_accounts_active_48h": 8,
-        "telegram_channel_user_count": 137018
-    },
-    "last_updated": "2022-02-11T17:00:39.788Z",
-    "tickers": [
-        {
-            "base": "0XE8176D414560CFE1BF82FD73B986823B89E4F545",
-            "target": "WBNB",
-            "market": {
-                "name": "PancakeSwap (v2)",
-                "identifier": "pancakeswap_new",
-            },
-            "last": 0.0002162766588510402,
-            "volume": 306430.5296362685,
-            "trade_url": "https://pancakeswap.finance/swap?inputCurrency=0xe8176d414560cfe1bf82fd73b986823b89e4f545&outputCurrency=0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
-            "coin_id": "step-hero",
-            "target_coin_id": "wbnb"
-        }
-    ]
-}
+def handle_data_token_price(data, token):
+    for item in data["prices"]:
+        TokenPrice.objects.get_or_create(
+            token=token,
+            time_check=datetime.fromtimestamp(item[0] / 1000, timezone.utc),
+            defaults={
+                "price_open": item[1],
+                "price_close": item[1],
+                "price_avg": item[1],
+            }
+        )
+
+
+def fetch_token_market_chart(token, token_id, fr, to):
+    # NON_RANGE
+    # Get historical market data include price, market cap, and 24h volume (granularity auto)
+    # Minutely data will be used for duration within 1 day,
+    # Hourly data will be used for duration between 1 day and 90 days,
+    # Daily data will be used for duration above 90 days.
+
+    # RANGE
+    # Get historical market data include price, market cap, and 24h volume within a range of timestamp
+    # Data granularity is automatic (cannot be adjusted)
+    # 1 day from query time = 5 minute interval data
+    # 1 - 90 days from query time = hourly data
+    # above 90 days from query time = daily data (00:00 UTC)
+    req = requests.get("https://api.coingecko.com/api/v3/coins/{}/market_chart/range".format(token_id), params={
+        "vs_currency": "usd",
+        "from": fr,
+        "to": to,
+    })
+    try:
+        if token is None:
+            token = Token.objects.get(external_ids__coingecko=token_id)
+        handle_data_token_price(req.json(), token)
+    except Exception as e:
+        print(e)
+
+
+def fetch_token(token_id):
+    url = "https://api.coingecko.com/api/v3/coins/{}".format(token_id)
+    req = requests.get(url)
+    wallet, _ = Wallet.objects.get_or_create(
+        address=random.choice(list(operators.keys())),
+        chain="binance-smart-chain"
+    )
+    handle_data_token(req.json(), wallet)
+
+
+def fetch_cgk(break_wallet=None, enable_detail=True, enable_ranges=None, push_file=False, push_mq=False):
+    if enable_ranges is None:
+        enable_ranges = [1, 90, 180]
+    now = datetime.now().timestamp()
+    req = requests.get("https://api.coingecko.com/api/v3/coins/list")
+    coins = req.json()
+    if not os.path.exists("data/coingecko"):
+        os.makedirs("data/coingecko")
+    with open('data/coingecko/0_coins.json', 'w') as f:
+        json.dump(coins, f, ensure_ascii=False, indent=2)
+    total = len(coins)
+    index = 0
+    for coin in coins:
+        if coin["id"]:
+            index = index + 1
+            print("index: {},name: {}, percent: {}".format(index, coin["id"], (index / total) * 100))
+            # START CHECK AND SKIP
+            if break_wallet:
+                if coin["id"] == break_wallet:
+                    break_wallet = None
+                else:
+                    continue
+            if coin["id"].startswith(("0-5x-", "1x-", "2x-", "3x-", "4x-", "5x-")):
+                continue
+            # END CHECK AND SKIP
+            path_token = "data/coingecko/{}/".format(coin["id"])
+            path_prices = "{}/prices".format(path_token)
+            if not os.path.exists(path_token):
+                os.makedirs(path_token)
+                os.makedirs(path_prices)
+            urls = {
+                "detail": "https://api.coingecko.com/api/v3/coins/{}".format(coin["id"]),
+                "chart": "https://api.coingecko.com/api/v3/coins/{}/market_chart/range".format(coin["id"]),
+            }
+
+            # =======================
+            data_ranges = [
+                {"range": 180, "fr": now - ONE_DAY * 180, "to": now - ONE_DAY * 90},
+                {"range": 90, "fr": now - ONE_DAY * 90, "to": now - ONE_DAY},
+                {"range": 1, "fr": now - ONE_DAY, "to": now},
+            ]
+            for r in data_ranges:
+                if r["range"] not in enable_ranges:
+                    continue
+                p = "{path_prices}/{range}.json".format(
+                    path_prices=path_prices,
+                    range=datetime.now().timestamp() if r["range"] == 1 else r["range"]
+                )
+                if not os.path.exists(p):
+                    while True:
+                        try:
+                            req = requests.get(
+                                urls["chart"],
+                                params={
+                                    "vs_currency": "usd",
+                                    "from": r["fr"],
+                                    "to": r["to"],
+                                }
+                            )
+                            coin_data_price = req.json()
+                            if push_file:
+                                with open(p, "w") as f:
+                                    json.dump(coin_data_price, f, ensure_ascii=False, indent=2)
+                            if push_mq and os.getenv("QUEUE_CGK_PRICE"):
+                                channel.basic_publish(
+                                    exchange='',
+                                    routing_key=os.getenv("QUEUE_CGK_PRICE"),
+                                    body=json.dumps({
+                                        "token_id": coin["id"],
+                                        "prices": coin_data_price
+                                    }).encode("utf-8")
+                                )
+                            break
+                        except Exception as e:
+                            time.sleep(5)
+                            print(e)
+                            continue
+            # =======================
+            if not enable_detail:
+                continue
+            while True:
+                try:
+                    req = requests.get(urls["detail"])
+                    coin_data = req.json()
+                    if push_file:
+                        with open("{path_token}/{timestamp}.json".format(
+                            path_token=path_token,
+                            timestamp=datetime.now().timestamp()
+                        ), "w") as f:
+                            json.dump(coin_data, f, ensure_ascii=False, indent=2)
+                    if push_mq and os.getenv("QUEUE_CGK_TOKEN"):
+                        channel.basic_publish(
+                            exchange='',
+                            routing_key=os.getenv("QUEUE_CGK_TOKEN"),
+                            body=json.dumps(coin_data).encode("utf-8")
+                        )
+                    break
+
+                except Exception as e:
+                    time.sleep(5)
+                    print(e)
+                    continue
+
+
+def read_data_local():
+    index = 0
+    root_data = "data/coingecko"
+    dir_list = os.listdir("data/coingecko")
+    dir_list.sort()
+    for dir_name in dir_list:
+        full_dir = "{}/{}".format(root_data, dir_name)
+        if os.path.isdir(full_dir):
+            files = []
+            for sub_dir in os.listdir(full_dir):
+                full_sub_dir = "{}/{}".format(full_dir, sub_dir)
+                if os.path.isfile(full_sub_dir):
+                    files.append(sub_dir)
+            files.sort()
+            for fn in files:
+                full_sub_dir = "{}/{}".format(full_dir, fn)
+                with open(full_sub_dir, 'r') as j:
+                    channel.basic_publish(
+                        exchange='',
+                        routing_key=os.getenv("QUEUE_CGK_TOKEN"),
+                        body=json.dumps(json.loads(j.read())).encode("utf-8")
+                    )
+
+            full_dir_prices = "{}/{}".format(full_dir, "prices")
+            if os.path.exists(full_dir_prices):
+                for price_dir_name in os.listdir(full_dir_prices):
+                    full_price_dir_name = "{}/{}".format(full_dir_prices, price_dir_name)
+                    with open(full_price_dir_name, 'r') as j:
+                        channel.basic_publish(
+                            exchange='',
+                            routing_key=os.getenv("QUEUE_CGK_PRICE"),
+                            body=json.dumps({
+                                "token_id": dir_name,
+                                "prices": json.loads(j.read())
+                            }).encode("utf-8")
+                        )
+        index = index + 1
+        if index == 6:
+            break
+
+
+def handle_queue_rabbitmq(ch, method, properties, data):
+    print(data)
