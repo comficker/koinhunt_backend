@@ -48,8 +48,10 @@ class Token(BaseModel, BlockChain, Validation):
     total_supply = models.FloatField(default=0)
     circulating_supply = models.FloatField(default=0)
 
-    init_price = models.FloatField(default=0)
-    current_price = models.FloatField(default=0)
+    price_init = models.FloatField(default=0)
+    price_current = models.FloatField(default=0)
+    price_ath = models.FloatField(default=0)
+    price_atl = models.FloatField(default=0)
 
     tokenomics = models.JSONField(null=True, blank=True)
     platforms = models.JSONField(null=True, blank=True)
@@ -85,7 +87,9 @@ class Project(BaseModel, HasIDString, Validation):
     homepage = models.CharField(max_length=128, blank=True)
     links = models.JSONField(null=True, blank=True)
     features = models.JSONField(null=True, blank=True)
+    launch_date = models.DateTimeField(null=True, blank=True)
 
+    score_hunt = models.FloatField(default=0)
     score_calculated = models.FloatField(default=0)
     score_detail = models.JSONField(default=default_score)
 
@@ -175,7 +179,7 @@ class Contribute(BaseModel, Validation):
     def get_validation_score(self):
         validates = self.validates.order_by("-power")
         count = validates.count()
-        self.validation_score = validates.aggregate(total=Sum('power')).get("total") or 0
+        self.score_validation = validates.aggregate(total=Sum('power')).get("total") or 0
         if hasattr(self, 'meta') and self.meta is None:
             self.meta = {}
         self.meta["validates"] = list(map(lambda x: {"power": x.power, "wallet": x.wallet.address}, validates[:5]))

@@ -5,4 +5,10 @@ from utils import coingecko
 class Command(BaseCommand):
 
     def handle(self, *args, **options):
-        coingecko.fetch_cgk(break_wallet="infinity-eth", enable_detail=False, enable_ranges=[1])
+        coingecko.fetch_cgk(
+            break_wallet=None,
+            enable_detail=False,
+            enable_ranges=[1],
+            push_file=False,
+            push_mq=True
+        )

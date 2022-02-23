@@ -57,8 +57,15 @@ def extract_links(links):
 
 def clean_short_report(market_data):
     if type(market_data.get("ath")) is dict:
+        pac = 0
+        pcc = 0
+        if market_data["atl"].get("usd", 0) > 0:
+            pac = round(market_data["ath"].get("usd", 0) / market_data["atl"].get("usd", 0))
+            pcc = round(market_data["current_price"].get("usd", 0) / market_data["atl"].get("usd", 0))
         return {
-            "current_price": market_data["current_price"].get("usd", 0),
+            "pac": pac,
+            "pcc": pcc,
+            "price_current": market_data["current_price"].get("usd", 0),
             "ath": market_data["ath"].get("usd", 0),
             "ath_date": market_data["ath_date"].get("usd", 0),
             "atl": market_data["atl"].get("usd", 0),
@@ -93,15 +100,15 @@ def handle_data_token(data, wallet):
             description=data["description"]["en"][:300],
             media=media,
             total_supply=data["market_data"]["total_supply"] if data["market_data"]["total_supply"] else 0,
-            circulating_supply=data["market_data"]["circulating_supply"] if data["market_data"][
-                "circulating_supply"] else 0,
-            current_price=data["market_data"]["current_price"].get("usd", 0),
-            init_price=short_report.get("atl", 0),
+            circulating_supply=data["market_data"]["circulating_supply"] if data["market_data"]["circulating_supply"] else 0,
             short_report=short_report,
-            external_ids={
-                "coingecko": data["id"]
-            },
-            wallet=wallet
+            external_ids={"coingecko": data["id"]},
+            wallet=wallet,
+
+            price_init=short_report.get("atl", 0),
+            price_current=data["market_data"]["price_current"].get("usd", 0),
+            price_ath=short_report.get("ath", 0),
+            price_atl=short_report.get("atl", 0),
         )
         raw_project = {
             "name": data["name"],
@@ -122,7 +129,6 @@ def handle_data_token(data, wallet):
                 id_string=data["id"],
                 defaults=raw_project
             )
-
         if project.meta is None:
             project.meta = {}
         project.meta["social"] = data.get("community_data")
@@ -167,7 +173,7 @@ def handle_data_token(data, wallet):
         if not token.external_ids.get("coingecko"):
             token.external_ids["coingecko"] = data["id"]
         token.short_report = short_report
-        token.current_price = short_report.get("current_price", 0)
+        token.price_current = short_report.get("price_current", 0)
         token.save()
 
     if project is None:
@@ -289,30 +295,29 @@ def fetch_cgk(break_wallet=None, enable_detail=True, enable_ranges=None, push_fi
                 "chart": "https://api.coingecko.com/api/v3/coins/{}/market_chart/range".format(coin["id"]),
             }
             # ======================= SEND TOKEN
-            if not enable_detail:
-                continue
-            while True:
-                try:
-                    req = requests.get(urls["detail"])
-                    coin_data = req.json()
-                    if push_file:
-                        with open("{path_token}/{timestamp}.json".format(
-                            path_token=path_token,
-                            timestamp=datetime.now().timestamp()
-                        ), "w") as f:
-                            json.dump(coin_data, f, ensure_ascii=False, indent=2)
-                    if push_mq and os.getenv("QUEUE_CGK_TOKEN"):
-                        channel.basic_publish(
-                            exchange='',
-                            routing_key=os.getenv("QUEUE_CGK_TOKEN"),
-                            body=json.dumps(coin_data).encode("utf-8")
-                        )
-                    break
+            if enable_detail:
+                while True:
+                    try:
+                        req = requests.get(urls["detail"])
+                        coin_data = req.json()
+                        if push_file:
+                            with open("{path_token}/{timestamp}.json".format(
+                                path_token=path_token,
+                                timestamp=datetime.now().timestamp()
+                            ), "w") as f:
+                                json.dump(coin_data, f, ensure_ascii=False, indent=2)
+                        if push_mq and os.getenv("QUEUE_CGK_TOKEN"):
+                            channel.basic_publish(
+                                exchange='',
+                                routing_key=os.getenv("QUEUE_CGK_TOKEN"),
+                                body=json.dumps(coin_data).encode("utf-8")
+                            )
+                        break
 
-                except Exception as e:
-                    time.sleep(5)
-                    print(e)
-                    continue
+                    except Exception as e:
+                        time.sleep(5)
+                        print(e)
+                        continue
             # ======================= SEND_PRICE
             data_ranges = [
                 {"range": 180, "fr": now - ONE_DAY * 180, "to": now - ONE_DAY * 90},
@@ -365,6 +370,10 @@ def read_data_local():
     dir_list = os.listdir("data/coingecko")
     dir_list.sort()
     for dir_name in dir_list:
+        index = index + 1
+        print(index)
+        if index <= 5503:
+            continue
         full_dir = "{}/{}".format(root_data, dir_name)
         if os.path.isdir(full_dir):
             files = []
@@ -374,12 +383,14 @@ def read_data_local():
                     files.append(sub_dir)
             files.sort()
             for fn in files:
+                if fn == ".DS_Store":
+                    continue
                 full_sub_dir = "{}/{}".format(full_dir, fn)
                 with open(full_sub_dir, 'r') as j:
                     channel.basic_publish(
                         exchange='',
                         routing_key=os.getenv("QUEUE_CGK_TOKEN"),
-                        body=json.dumps(json.loads(j.read())).encode("utf-8")
+                        body=json.dumps(json.loads(j.read()))
                     )
 
             full_dir_prices = "{}/{}".format(full_dir, "prices")
@@ -395,5 +406,3 @@ def read_data_local():
                                 "token_id": dir_name,
                             }).encode("utf-8")
                         )
-        index = index + 1
-        print(index)

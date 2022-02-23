@@ -1,5 +1,4 @@
 import os
-
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from apps.governance.models import TokenContract
@@ -7,6 +6,7 @@ from apps.project.models import Event, Token, Project, Incentive, Contribute, Va
 from django.contrib.contenttypes.models import ContentType
 from utils.contracts import get_power
 from django.utils import timezone
+from utils.wallets import operators
 
 REWARD_BASE = float(os.getenv("REWARD_BASE", "0"))
 
@@ -45,7 +45,7 @@ def make_init_contrib(instance):
         power_target=power_target,
         is_active=True,
     )
-    Validate.objects.create(
+    init_validate = Validate.objects.create(
         contribute=contrib,
         wallet=instance.wallet,
         nft=instance.nft,
@@ -54,6 +54,8 @@ def make_init_contrib(instance):
     instance.refresh_from_db()
     if instance.meta is None:
         instance.meta = {}
+    if type(instance) is Project:
+        instance.score_hunt = init_validate.power
     instance.meta["contrib"] = contrib.id
     instance.meta["contrib_reward"] = REWARD_BASE
     instance.init_power_target = power_target
@@ -112,6 +114,11 @@ def on_token_post_save(sender, instance, created, *args, **kwargs):
 @receiver(post_save, sender=Validate)
 def on_validate_post_save(sender, instance, created, *args, **kwargs):
     if created:
+        if instance.wallet.address in operators.keys():
+            instance.power = 500
+        else:
+            instance.power = get_power(instance)
+        instance.save()
         instance.contribute.get_validation_score()
         check_contrib(instance.contribute)
         contrib = instance.contribute

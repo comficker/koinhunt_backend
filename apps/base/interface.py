@@ -42,7 +42,7 @@ class HasIDString(models.Model):
 
 class Validation(models.Model):
     verified = models.BooleanField(default=False)
-    validation_score = models.FloatField(default=0)
+    score_validation = models.FloatField(default=0)
     init_power_target = models.FloatField(default=REWARD_BASE * 100)
     score_detail = models.JSONField(default=dict, null=True, blank=True)
     meta = models.JSONField(null=True, blank=True)
@@ -54,14 +54,14 @@ class Validation(models.Model):
         ct = ContentType.objects.get_for_model(self)
         contributions = ct.contributions.filter(
             target_object_id=self.id,
-        ).order_by('-validation_score')
+        ).order_by('-score_validation')
         count = contributions.count()
-        self.validation_score = contributions.aggregate(total=Sum('validation_score')).get("total", 0)
+        self.score_validation = contributions.aggregate(total=Sum('score_validation')).get("total", 0)
         if hasattr(self, 'meta') and self.meta is None:
             self.meta = {}
         self.meta["contributions"] = list(map(lambda x: {
             "wallet": x.wallet.address,
-            "validation_score": x.validation_score
+            "score_validation": x.score_validation
         }, contributions[:5]))
         init_contrib = contributions.filter(field="INIT").first()
         if init_contrib:

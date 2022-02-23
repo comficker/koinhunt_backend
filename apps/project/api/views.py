@@ -126,6 +126,19 @@ class ProjectViewSet(viewsets.ModelViewSet):
     pagination_class = pagination.Pagination
     filter_backends = [OrderingFilter, SearchFilter]
     search_fields = ['name', 'description']
+    ordering_fields = [
+        'name',
+        'score_calculated',
+        'event_date_start',
+        'score_hunt',
+        'score_validation',
+        'main_token__price_ath',
+        'main_token__price_atl',
+        'main_token__price_current',
+        'main_token__short_report__pac',
+        'main_token__short_report__pcc',
+        'launch_date',
+    ]
     lookup_field = 'id_string'
 
     def retrieve(self, request, *args, **kwargs):
@@ -153,9 +166,9 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
         q = Q(db_status=1, wallet__isnull=False)
         if request.GET.get("validating") != "true":
-            q = q & Q(validation_score__gte=F("init_power_target"))
+            q = q & Q(score_validation__gte=F("init_power_target"))
         elif request.GET.get("validating") != "false":
-            q = q & Q(validation_score__lt=F("init_power_target"))
+            q = q & Q(score_validation__lt=F("init_power_target"))
             if request.wallet and request.wallet.address == "0x007307FB47F9DbAA694C474dB8C7c43Fad6258D5":
                 q = q & Q(media__isnull=True)
             else:
@@ -185,16 +198,15 @@ class ProjectViewSet(viewsets.ModelViewSet):
                 When(event_date_start__lt=now, then=now - F('event_date_start')),
                 output_field=DurationField(),
             )).order_by('time_diff')
+
         queryset = self.filter_queryset(
-            qs \
-                .filter(q).annotate(event_date_start=Subquery(ev_qs.values("event_date_start")[:1])) \
-                .prefetch_related(
+            qs.filter(q).annotate(event_date_start=Subquery(ev_qs.values("event_date_start")[:1])).prefetch_related(
                 Prefetch(
                     "project_events",
                     queryset=ev_qs,
                     to_attr='active_prices'
                 )
-            ).order_by('-event_date_start', '-score_calculated')
+            ).order_by(*['-score_calculated', '-event_date_start'])
         )
 
         # =========== Making instance
@@ -297,7 +309,7 @@ class EventViewSet(viewsets.ModelViewSet):
             q = q & (Q(event_date_start__gt=now) | Q(event_date_start__isnull=True))
             q = q & Q(verified=False)
         else:
-            q = q & Q(validation_score__gte=REWARD_BASE * 100)
+            q = q & Q(score_validation__gte=REWARD_BASE * 100)
         if request.GET.get("project"):
             q = q & Q(project_id=request.GET.get("project"))
         if request.GET.get("event_name"):
@@ -445,7 +457,6 @@ def validate(request):
         address = w3.eth.account.recoverHash(message_hash, signature=signature)
         decoded = base64.b64decode(sign_mess)
         m_json = json.loads(decoded)
-        power = 1
         if address == request.wallet.address and m_json.get("contrib") and m_json.get("timestamp"):
             if address in operators.keys():
                 for key in operators.keys():
@@ -457,17 +468,11 @@ def validate(request):
                         wallet=operator_wallet,
                         contribute_id=m_json.get("contrib"),
                         nft_id=m_json.get("nft") if m_json.get("nft") else None,
-                        defaults={
-                            "power": 500
-                        }
                     )
             else:
                 models.Validate.objects.get_or_create(
                     wallet=request.wallet,
                     contribute_id=m_json.get("contrib"),
                     nft_id=m_json.get("nft") if m_json.get("nft") else None,
-                    defaults={
-                        "power": power
-                    }
                 )
             return Response({})

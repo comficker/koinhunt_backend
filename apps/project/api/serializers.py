@@ -23,13 +23,14 @@ class TermSerializer(serializers.ModelSerializer):
 class ProjectSerializer(serializers.ModelSerializer):
     id_string = serializers.CharField(required=False)
     collections = serializers.SerializerMethodField()
+    my_score = serializers.SerializerMethodField()
     recent = serializers.SerializerMethodField()
 
     class Meta:
         model = models.Project
         fields = '__all__'
         read_only_fields = ('tokens', 'score_detail')
-        extra_fields = ["collections", "recent"]
+        extra_fields = ["collections", "recent", "my_score"]
 
     def to_representation(self, instance):
         self.fields["terms"] = TermSerializer(many=True)
@@ -37,9 +38,6 @@ class ProjectSerializer(serializers.ModelSerializer):
         self.fields["wallet"] = WalletSerializer()
         self.fields["main_token"] = TokenSerializer()
         return super(ProjectSerializer, self).to_representation(instance)
-
-    def get_events(self, instance):
-        return EventSerializerSimple(instance.project_events.all(), many=True).data
 
     def get_collections(self, instance):
         request = self.context.get("request")
@@ -61,6 +59,12 @@ class ProjectSerializer(serializers.ModelSerializer):
         if hasattr(instance, "active_prices") and len(instance.active_prices):
             return EventSerializerSimple(instance.active_prices[0]).data
         return None
+
+    def get_my_score(self, instance):
+        request = self.context.get("request")
+        if request and request.wallet:
+            return instance.score_detail.get(str(request.wallet.id), None)
+        return 0
 
 
 class ProjectSerializerSimple(serializers.ModelSerializer):
@@ -90,7 +94,7 @@ class ProjectSerializerDetail(serializers.ModelSerializer):
     def get_events(self, instance):
         now = timezone.now()
         return EventSerializerSimple(
-            instance.project_events.filter(validation_score__gte=500).annotate(
+            instance.project_events.filter(score_validation__gte=500).annotate(
                 relevance=Case(
                     When(event_date_start__gte=now, then=1),
                     When(event_date_start__lt=now, then=2),
@@ -178,12 +182,10 @@ class EventSerializer(serializers.ModelSerializer):
 class EventSerializerSimple(serializers.ModelSerializer):
     class Meta:
         model = models.Event
-        fields = '__all__'
+        fields = ["name", "event_name", "id"]
         extra_fields = []
 
     def to_representation(self, instance):
-        self.fields["project"] = ProjectSerializerSimple()
-        self.fields["targets"] = ProjectSerializerSimple(many=True)
         return super(EventSerializerSimple, self).to_representation(instance)
 
 
