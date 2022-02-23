@@ -11,4 +11,16 @@ class Command(BaseCommand):
                 token.short_report["pac"] = round(token.short_report["ath"] / token.price_init)
                 token.short_report["pcc"] = round(token.price_current / token.price_init)
                 token.save()
+            project = token.main_projects.first()
+            if project:
+                init_validate = Validate.objects.filter(
+                    contribute__field="INIT",
+                    contribute__target_object_id=project.pk,
+                    contribute__target_content_type__model="project",
+                    contribute__target_content_type__app_label="project",
+                    wallet=project.wallet
+                ).first()
+                if init_validate:
+                    project.score_hunt = init_validate.power
+                    project.save()
 
