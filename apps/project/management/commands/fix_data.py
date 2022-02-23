@@ -8,6 +8,8 @@ class Command(BaseCommand):
         tokens = Token.objects.all()
         for token in tokens:
             if token.short_report and token.price_init > 0:
+                token.price_ath = token.short_report.get("ath")
+                token.price_atl = token.short_report.get("atl")
                 token.short_report["pac"] = round(token.short_report["ath"] / token.price_init)
                 token.short_report["pcc"] = round(token.price_current / token.price_init)
                 token.save()
