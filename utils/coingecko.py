@@ -165,6 +165,10 @@ def handle_data_token(data, wallet):
     if project is None:
         project = token.projects.first()
     if project:
+        ProjectTerm.objects.filter(
+            project=project,
+            term__taxonomy="chain"
+        ).delete()
         for ticker in data["tickers"]:
             market, _ = Project.objects.get_or_create(
                 id_string=ticker["market"]["identifier"],
