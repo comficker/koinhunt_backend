@@ -101,14 +101,15 @@ def handle_data_token(data, wallet):
             media=media,
             total_supply=data["market_data"]["total_supply"] if data["market_data"]["total_supply"] else 0,
             circulating_supply=data["market_data"]["circulating_supply"] if data["market_data"]["circulating_supply"] else 0,
-            short_report=short_report,
             external_ids={"coingecko": data["id"]},
             wallet=wallet,
 
+            short_report=short_report,
             price_init=short_report.get("atl", 0),
             price_current=data["market_data"]["price_current"].get("usd", 0),
             price_ath=short_report.get("ath", 0),
             price_atl=short_report.get("atl", 0),
+            platforms=data.get("platforms")
         )
         raw_project = {
             "name": data["name"],
@@ -148,37 +149,21 @@ def handle_data_token(data, wallet):
                     project=project,
                     term=term
                 )
-
-        for key in data.get("platforms").keys():
-            chain_raw = CHAIN_MAPPING.get(key)
-            if chain_raw:
-                term, _ = Term.objects.get_or_create(
-                    taxonomy="chain",
-                    defaults={
-                        "name": chain_raw.get("name"),
-                        "description": chain_raw.get("description")
-                    }
-                )
-                if term not in project.terms.all():
-                    ProjectTerm.objects.create(
-                        project=project,
-                        term=term,
-                        meta={
-                            "address": data.get("platforms").get(key)
-                        }
-                    )
     else:
         if token.external_ids is None:
             token.external_ids = {}
         if not token.external_ids.get("coingecko"):
             token.external_ids["coingecko"] = data["id"]
+
         token.short_report = short_report
         token.price_current = short_report.get("price_current", 0)
+        token.price_ath = short_report.get("ath", 0)
+        token.price_atl = short_report.get("atl", 0)
+        token.platforms = data.get("platforms")
         token.save()
 
     if project is None:
         project = token.projects.first()
-
     if project:
         for ticker in data["tickers"]:
             market, _ = Project.objects.get_or_create(
@@ -204,6 +189,24 @@ def handle_data_token(data, wallet):
                     }
                 )
                 event.targets.add(market)
+        for key in data.get("platforms", {}).keys():
+            chain_raw = CHAIN_MAPPING.get(key)
+            if chain_raw:
+                term, _ = Term.objects.get_or_create(
+                    taxonomy="chain",
+                    defaults={
+                        "name": chain_raw.get("name"),
+                        "description": chain_raw.get("description")
+                    }
+                )
+                if term not in project.terms.all():
+                    ProjectTerm.objects.create(
+                        project=project,
+                        term=term,
+                        meta={
+                            "address": data["platforms"]["key"]
+                        }
+                    )
 
     if data["last_updated"]:
         for key in ["twitter_followers", "telegram_channel_user_count", "facebook_likes"]:
@@ -315,7 +318,7 @@ def fetch_cgk(break_wallet=None, enable_detail=True, enable_ranges=None, push_fi
                         break
 
                     except Exception as e:
-                        time.sleep(5)
+                        time.sleep(10)
                         print(e)
                         continue
             # ======================= SEND_PRICE
@@ -357,7 +360,7 @@ def fetch_cgk(break_wallet=None, enable_detail=True, enable_ranges=None, push_fi
                                 )
                             break
                         except Exception as e:
-                            time.sleep(5)
+                            time.sleep(10)
                             print(e)
                             continue
 
