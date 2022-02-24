@@ -152,7 +152,7 @@ def handle_data_token(data, wallet):
 
             short_report=short_report,
             price_init=short_report.get("atl", 0),
-            price_current=data["market_data"]["price_current"].get("usd", 0),
+            price_current=short_report.get("price_current", 0),
             price_ath=short_report.get("ath", 0),
             price_atl=short_report.get("atl", 0),
             platforms=data.get("platforms")
@@ -256,11 +256,12 @@ def handle_data_token(data, wallet):
                         project=project,
                         term=term,
                         meta={
-                            "address": data["platforms"]["key"]
+                            "address": data["platforms"][key]
                         }
                     )
 
     if data["last_updated"]:
+        token.time_check = data["last_updated"]
         for key in ["twitter_followers", "telegram_channel_user_count", "facebook_likes"]:
             if data["community_data"][key] is None:
                 continue

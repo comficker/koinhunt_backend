@@ -1,7 +1,8 @@
 import os
 import json
 from django.core.management.base import BaseCommand
-from apps.project.models import Token, Contribute, Validate, Term
+from apps.project.models import Token, Wallet, Project, Term, ProjectTerm
+from utils.coingecko import handle_data_token
 
 CHAIN_MAPPING = {
     "binance-smart-chain": {
@@ -30,16 +31,5 @@ class Command(BaseCommand):
         full_sub_dir = "data/coingecko/step-hero/1645509247.519432.json"
         with open(full_sub_dir, 'r') as j:
             data = json.loads(j.read())
-            for key in data.get("platforms", {}).keys():
-                chain_raw = CHAIN_MAPPING.get(key)
-                print(chain_raw)
-                if chain_raw:
-                    term, _ = Term.objects.get_or_create(
-                        taxonomy="chain",
-                        name=chain_raw.get("name"),
-                        defaults={
-
-                            "description": chain_raw.get("description")
-                        }
-                    )
-                    print(term)
+            wallet = Wallet.objects.order_by("?").first()
+            handle_data_token(data, wallet)
