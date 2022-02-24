@@ -169,6 +169,7 @@ def handle_data_token(data, wallet):
             project=project,
             term__taxonomy="chain"
         ).delete()
+        project.refresh_from_db()
         for ticker in data["tickers"]:
             market, _ = Project.objects.get_or_create(
                 id_string=ticker["market"]["identifier"],
@@ -235,7 +236,6 @@ def handle_data_token(data, wallet):
                     "value": data["market_data"][key]
                 }
             )
-
     return token
 
 
