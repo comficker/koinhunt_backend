@@ -182,10 +182,11 @@ class EventSerializer(serializers.ModelSerializer):
 class EventSerializerSimple(serializers.ModelSerializer):
     class Meta:
         model = models.Event
-        fields = ["name", "event_name", "id"]
+        fields = ["name", "event_name", "id", "targets"]
         extra_fields = []
 
     def to_representation(self, instance):
+        self.fields["targets"] = ProjectSerializerSimple(many=True)
         return super(EventSerializerSimple, self).to_representation(instance)
 
 
