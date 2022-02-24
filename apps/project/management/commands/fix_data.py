@@ -12,7 +12,13 @@ class Command(BaseCommand):
                 token.price_atl = token.short_report.get("atl")
                 token.short_report["pac"] = round(token.short_report["ath"] / token.price_init)
                 token.short_report["pcc"] = round(token.price_current / token.price_init)
-                token.save()
+
+            else:
+                token.short_report["pac"] = 0
+                token.short_report["pcc"] = 0
+                token.price_ath = 0
+                token.price_ath = 0
+            token.save()
             project = token.main_projects.first()
             if project:
                 init_validate = Validate.objects.filter(

@@ -63,7 +63,7 @@ def make_init_contrib(instance):
 
 
 def check_contrib(instance):
-    power_target_current = instance.target.validation_score
+    power_target_current = instance.target.score_validation
     for incentive in instance.incentives.filter(is_active=True, reward_total__gt=0):
         power_target = 0
         is_distributing = False
