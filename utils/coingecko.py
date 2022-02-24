@@ -211,11 +211,6 @@ def handle_data_token(data, wallet):
     if project is None:
         project = token.projects.first()
     if project:
-        ProjectTerm.objects.filter(
-            project=project,
-            term__taxonomy="chain"
-        ).delete()
-        pta = list(map(lambda x: x.term.id, ProjectTerm.objects.filter(project=project, term__taxonomy="chain")))
         for ticker in data["tickers"]:
             market, _ = Project.objects.get_or_create(
                 id_string=ticker["market"]["identifier"],
@@ -240,6 +235,12 @@ def handle_data_token(data, wallet):
                     }
                 )
                 event.targets.add(market)
+
+        ProjectTerm.objects.filter(
+            project=project,
+            term__taxonomy="chain"
+        ).delete()
+        pta = list(map(lambda x: x.term.id, ProjectTerm.objects.filter(project=project, term__taxonomy="chain")))
         for key in data.get("platforms", {}).keys():
             chain_raw = CHAIN_MAPPING.get(key)
             if chain_raw:
