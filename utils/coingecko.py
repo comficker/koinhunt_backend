@@ -331,42 +331,43 @@ def fetch_cgk(break_wallet=None, enable_detail=True, enable_ranges=None, push_fi
                 {"range": 90, "fr": now - ONE_DAY * 90, "to": now - ONE_DAY},
                 {"range": 1, "fr": now - ONE_DAY, "to": now},
             ]
-            for r in data_ranges:
-                if r["range"] not in enable_ranges:
-                    continue
-                p = "{path_prices}/{range}.json".format(
-                    path_prices=path_prices,
-                    range=datetime.now().timestamp() if r["range"] == 1 else r["range"]
-                )
-                if not os.path.exists(p):
-                    while True:
-                        try:
-                            req = requests.get(
-                                urls["chart"],
-                                params={
-                                    "vs_currency": "usd",
-                                    "from": r["fr"],
-                                    "to": r["to"],
-                                }
-                            )
-                            coin_data_price = req.json()
-                            if push_file:
-                                with open(p, "w") as f:
-                                    json.dump(coin_data_price, f, ensure_ascii=False, indent=2)
-                            if push_mq and os.getenv("QUEUE_CGK_PRICE"):
-                                channel.basic_publish(
-                                    exchange='',
-                                    routing_key=os.getenv("QUEUE_CGK_PRICE"),
-                                    body=json.dumps({
-                                        **coin_data_price,
-                                        "token_id": coin["id"],
-                                    }).encode("utf-8")
+            if len(enable_ranges) > 0:
+                for r in data_ranges:
+                    if r["range"] not in enable_ranges:
+                        continue
+                    p = "{path_prices}/{range}.json".format(
+                        path_prices=path_prices,
+                        range=datetime.now().timestamp() if r["range"] == 1 else r["range"]
+                    )
+                    if not os.path.exists(p):
+                        while True:
+                            try:
+                                req = requests.get(
+                                    urls["chart"],
+                                    params={
+                                        "vs_currency": "usd",
+                                        "from": r["fr"],
+                                        "to": r["to"],
+                                    }
                                 )
-                            break
-                        except Exception as e:
-                            time.sleep(10)
-                            print(e)
-                            continue
+                                coin_data_price = req.json()
+                                if push_file:
+                                    with open(p, "w") as f:
+                                        json.dump(coin_data_price, f, ensure_ascii=False, indent=2)
+                                if push_mq and os.getenv("QUEUE_CGK_PRICE"):
+                                    channel.basic_publish(
+                                        exchange='',
+                                        routing_key=os.getenv("QUEUE_CGK_PRICE"),
+                                        body=json.dumps({
+                                            **coin_data_price,
+                                            "token_id": coin["id"],
+                                        }).encode("utf-8")
+                                    )
+                                break
+                            except Exception as e:
+                                time.sleep(10)
+                                print(e)
+                                continue
 
 
 # ======================== READ ======

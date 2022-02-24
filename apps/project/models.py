@@ -21,6 +21,15 @@ def default_score():
     }
 
 
+def default_partners():
+    return {
+        "markets": [],
+        "teams": [],
+        "backers": [],
+        "advisors": []
+    }
+
+
 # Create your models here.
 # ================ FOR PROJECT
 class Term(BaseModel, HasIDString):
@@ -87,6 +96,7 @@ class Project(BaseModel, HasIDString, Validation):
     homepage = models.CharField(max_length=128, blank=True)
     links = models.JSONField(null=True, blank=True)
     features = models.JSONField(null=True, blank=True)
+    partners = models.JSONField(default=default_partners, null=True, blank=True)
     launch_date = models.DateTimeField(null=True, blank=True)
 
     score_hunt = models.FloatField(default=0)

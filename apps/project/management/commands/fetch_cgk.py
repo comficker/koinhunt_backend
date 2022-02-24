@@ -6,9 +6,9 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         coingecko.fetch_cgk(
-            break_wallet="baby-floki-up",
-            enable_detail=False,
-            enable_ranges=[1],
-            push_file=False,
+            break_wallet=None,
+            enable_detail=True,
+            enable_ranges=[],
+            push_file=True,
             push_mq=True
         )
