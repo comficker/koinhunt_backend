@@ -194,8 +194,8 @@ def handle_data_token(data, wallet):
             if chain_raw:
                 term, _ = Term.objects.get_or_create(
                     taxonomy="chain",
+                    name=chain_raw.get("name"),
                     defaults={
-                        "name": chain_raw.get("name"),
                         "description": chain_raw.get("description")
                     }
                 )
