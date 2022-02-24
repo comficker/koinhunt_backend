@@ -27,6 +27,51 @@ CHAIN_MAPPING = {
         "id_string": "ethereum",
         "description": "Ethereum is a decentralized, open-source blockchain with smart contract functionality. "
                        "Ether is the native cryptocurrency of the platform."
+    },
+    "xdai": {
+        "name": "xDai Chain",
+        "id_string": "xdai",
+        "description": "Dai is a stablecoin cryptocurrency which aims to keep its value as close to one United States dollar as possible through an automated system of smart contracts on the Ethereum blockchain."
+    },
+    "polygon-pos": {
+        "name": "Polygon PoS",
+        "id_string": "polygon-pos",
+        "description": "Polygon PoS is a layer 2 scaling solution that achieves unprecedented transaction speed and cost savings by utilizing side-chains for transaction processing..."
+    },
+    "huobi-token": {
+        "name": "Huobi-Token",
+        "id_string": "huobi-token",
+        "description": "Huobi Token,HT (Huobi Token) is a blockchain-powered loyalty point system. It is the only token that Huobi officially launched. "
+    },
+    "optimistic-ethereum": {
+        "name": "Optimism",
+        "id_string": "optimistic-ethereum",
+        "description": "Optimism is a Layer 2 Optimistic Rollup network designed to utilize the strong security guarantees of Ethereum while reducing its cost and latency."
+    },
+    "harmony-shard-0": {
+        "name": "Harmony One",
+        "id_string": "harmony-shard-0",
+        "description": "To scale trust and create a radically fair economy. Harmony is a fast and open blockchain for decentralized applications. "
+    },
+    "avalanche": {
+        "name": "Avalanche",
+        "id_string": "avalanche",
+        "description": "Avalanche is a decentralized, open-source blockchain with smart contract functionality. AVAX is the native cryptocurrency of the platform."
+    },
+    "arbitrum-one": {
+        "name": "Arbitrum One",
+        "id_string": "arbitrum-one",
+        "description": "Arbitrum is an Optimistic Rollup built to scale Ethereum by @OffchainLabs"
+    },
+    "sora": {
+        "name": "Sora",
+        "id_string": "sora",
+        "description": "The SORA Network excels at providing tools for decentralized applications that use digital assets, such as atomic token swaps, bridging tokens to other chains."
+    },
+    "fantom": {
+        "name": "Fantom",
+        "id_string": "fantom",
+        "description": "Fantom is a highly scalable blockchain platform for DeFi, crypto dApps, and enterprise applications."
     }
 }
 ONE_DAY = 86400
@@ -100,7 +145,8 @@ def handle_data_token(data, wallet):
             description=data["description"]["en"][:300],
             media=media,
             total_supply=data["market_data"]["total_supply"] if data["market_data"]["total_supply"] else 0,
-            circulating_supply=data["market_data"]["circulating_supply"] if data["market_data"]["circulating_supply"] else 0,
+            circulating_supply=data["market_data"]["circulating_supply"] if data["market_data"][
+                "circulating_supply"] else 0,
             external_ids={"coingecko": data["id"]},
             wallet=wallet,
 
@@ -169,7 +215,7 @@ def handle_data_token(data, wallet):
             project=project,
             term__taxonomy="chain"
         ).delete()
-        project.refresh_from_db()
+        pta = list(map(lambda x: x.term.id, ProjectTerm.objects.filter(project=project, term__taxonomy="chain")))
         for ticker in data["tickers"]:
             market, _ = Project.objects.get_or_create(
                 id_string=ticker["market"]["identifier"],
@@ -204,7 +250,7 @@ def handle_data_token(data, wallet):
                         "description": chain_raw.get("description")
                     }
                 )
-                if term not in project.terms.all():
+                if term.id not in pta:
                     ProjectTerm.objects.create(
                         project=project,
                         term=term,
