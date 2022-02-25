@@ -56,4 +56,3 @@ class Command(BaseCommand):
                             )
                         item.socials[sm["social_field"]] = v
             item.save()
-            item.make_partners()
