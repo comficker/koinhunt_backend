@@ -7,6 +7,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         contributes = Contribute.objects.filter(
+            target_content_type__model="event",
             verified=False,
             field="INIT"
         )
