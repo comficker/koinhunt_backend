@@ -1,34 +1,59 @@
 from django.core.management.base import BaseCommand
-from apps.project.models import Token, Contribute, Validate
+from apps.project.models import Token, Contribute, Validate, Project, SocialTracker
+
+SOCIAL_MAPPING = {
+    "twitter_screen_name": {
+        "link": "follower_twitter",
+        "origin": "twitter_followers",
+        "social_field": "twitter"
+    },
+    "telegram_channel_identifier": {
+        "link": "follower_telegram",
+        "origin": "telegram_channel_user_count",
+        "social_field": "telegram_channel"
+    },
+    "facebook_username": {
+        "link": "follower_facebook",
+        "origin": "facebook_likes",
+        "social_field": "facebook"
+    }
+}
 
 
 class Command(BaseCommand):
 
     def handle(self, *args, **options):
-        tokens = Token.objects.all()
-        for token in tokens:
-            if token.short_report and token.price_init > 0:
-                token.price_ath = token.short_report.get("ath")
-                token.price_atl = token.short_report.get("atl")
-                token.short_report["pac"] = round(token.short_report["ath"] / token.price_init)
-                token.short_report["pcc"] = round(token.price_current / token.price_init)
-
-            else:
-                token.short_report["pac"] = 0
-                token.short_report["pcc"] = 0
-                token.price_ath = 0
-                token.price_ath = 0
-            token.save()
-            project = token.main_projects.first()
-            if project:
-                init_validate = Validate.objects.filter(
-                    contribute__field="INIT",
-                    contribute__target_object_id=project.pk,
-                    contribute__target_content_type__model="project",
-                    contribute__target_content_type__app_label="project",
-                    wallet=project.wallet
-                ).first()
-                if init_validate:
-                    project.score_hunt = init_validate.power
-                    project.save()
-
+        items = Project.objects.all()
+        for item in items:
+            token = item.main_token
+            if item.socials is None:
+                item.socials = {}
+            if token and item.meta.get("social"):
+                community_data = item.meta.get("social")
+                if item.links is None:
+                    continue
+                for link in item.links:
+                    k = None
+                    v = None
+                    if "https://twitter.com/" in link["url"]:
+                        k = "twitter_screen_name"
+                        v = link["url"].replace("https://twitter.com/", "")
+                    elif "https://www.facebook.com/" in link["url"]:
+                        k = "facebook_username"
+                        v = link["url"].replace("https://www.facebook.com/", "")
+                    elif "https://t.me/" in link["url"]:
+                        k = "telegram_channel_identifier"
+                        v = link["url"].replace("https://t.me/", "")
+                    if k and v:
+                        sm = SOCIAL_MAPPING.get(k, None)
+                        print("{}_{}_{}".format(sm["link"], v, community_data[sm["origin"]]))
+                        if community_data[sm["origin"]]:
+                            SocialTracker.objects.get_or_create(
+                                time_check=token.time_check,
+                                social_metric=sm["link"],
+                                social_id=v,
+                                value=community_data[sm["origin"]]
+                            )
+                        item.socials[sm["social_field"]] = v
+            item.save()
+            item.make_partners()

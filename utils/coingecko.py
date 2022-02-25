@@ -3,7 +3,7 @@ import time
 import os
 import json
 import requests
-from apps.project.models import Token, TokenPrice, Project, Term, ProjectTerm, TokenLog, Event, Wallet
+from apps.project.models import Token, TokenPrice, Project, Term, ProjectTerm, Event, Wallet, SocialTracker
 from datetime import datetime, timezone
 from apps.media.models import Media
 from apps.base.rabbitmq import channel
@@ -74,7 +74,39 @@ CHAIN_MAPPING = {
         "description": "Fantom is a highly scalable blockchain platform for DeFi, crypto dApps, and enterprise applications."
     }
 }
+SOCIAL_MAPPING = {
+    "twitter_followers": {
+        "link": "twitter_screen_name",
+        "social_metric": "follower_twitter",
+        "social_field": "twitter"
+    },
+    "telegram_channel_user_count": {
+        "link": "telegram_channel_identifier",
+        "social_metric": "follower_telegram",
+        "social_field": "telegram_channel"
+    },
+    "facebook_likes": {
+        "link": "facebook_username",
+        "social_metric": "follower_facebook",
+        "social_field": "facebook"
+    }
+}
 ONE_DAY = 86400
+headers = {
+    'authority': 'graphql-gateway.axieinfinity.com',
+    'sec-ch-ua': '" Not A;Brand";v="99", "Chromium";v="96", "Microsoft Edge";v="96"',
+    'accept': '*/*',
+    'content-type': 'application/json',
+    'sec-ch-ua-mobile': '?0',
+    'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36 Edg/96.0.1054.62',
+    'sec-ch-ua-platform': '"macOS"',
+    'origin': 'https://marketplace.axieinfinity.com',
+    'sec-fetch-site': 'same-site',
+    'sec-fetch-mode': 'cors',
+    'sec-fetch-dest': 'empty',
+    'referer': 'https://marketplace.axieinfinity.com/',
+    'accept-language': 'en-US,en;q=0.9,vi;q=0.8',
+}
 
 
 def extract_links(links):
@@ -176,9 +208,6 @@ def handle_data_token(data, wallet):
                 id_string=data["id"],
                 defaults=raw_project
             )
-        if project.meta is None:
-            project.meta = {}
-        project.meta["social"] = data.get("community_data")
         project.save()
         if token not in project.tokens.all():
             project.tokens.add(token)
@@ -211,6 +240,8 @@ def handle_data_token(data, wallet):
     if project is None:
         project = token.projects.first()
     if project:
+        if project.socials is None:
+            project.socials = {}
         for ticker in data["tickers"]:
             market, _ = Project.objects.get_or_create(
                 id_string=ticker["market"]["identifier"],
@@ -235,7 +266,6 @@ def handle_data_token(data, wallet):
                     }
                 )
                 event.targets.add(market)
-
         ProjectTerm.objects.filter(
             project=project,
             term__taxonomy="chain"
@@ -259,31 +289,22 @@ def handle_data_token(data, wallet):
                             "address": data["platforms"][key]
                         }
                     )
-
     if data["last_updated"]:
         token.time_check = data["last_updated"]
         for key in ["twitter_followers", "telegram_channel_user_count", "facebook_likes"]:
-            if data["community_data"][key] is None:
+            sm = SOCIAL_MAPPING.get(key, None)
+            if data["community_data"][key] is None or sm is None or not data["links"].get(sm["link"]):
                 continue
-            TokenLog.objects.get_or_create(
+            SocialTracker.objects.get_or_create(
                 time_check=data["last_updated"],
-                token=token,
-                field=key,
-                defaults={
-                    "value": data["community_data"][key]
-                }
+                social_metric=sm["social_metric"],
+                social_id=data["links"].get(sm["link"]),
+                value=data["community_data"][key]
             )
-        for key in ["circulating_supply", "total_supply"]:
-            if data["market_data"][key] is None:
-                continue
-            TokenLog.objects.get_or_create(
-                time_check=data["last_updated"],
-                token=token,
-                field=key,
-                defaults={
-                    "value": data["market_data"][key]
-                }
-            )
+            if project:
+                project.socials[sm["social_field"]] = data["links"].get(sm["link"])
+        if project:
+            project.save()
     return token
 
 
@@ -315,11 +336,14 @@ def handle_queue_rabbitmq(ch, method, properties, body):
 
 
 # ======================== FETCH ======
-def fetch_cgk(break_wallet=None, enable_detail=True, enable_ranges=None, push_file=False, push_mq=False):
+def fetch_cgk(break_wallet=-1, enable_detail=True, enable_ranges=None, push_file=False, push_mq=False):
     if enable_ranges is None:
         enable_ranges = [1, 90, 180]
     now = datetime.now().timestamp()
-    req = requests.get("https://api.coingecko.com/api/v3/coins/list")
+    req = requests.get(
+        "https://api.coingecko.com/api/v3/coins/list",
+        headers=headers
+    )
     coins = req.json()
     if not os.path.exists("data/coingecko"):
         os.makedirs("data/coingecko")
@@ -332,9 +356,9 @@ def fetch_cgk(break_wallet=None, enable_detail=True, enable_ranges=None, push_fi
             index = index + 1
             print("index: {},name: {}, percent: {}".format(index, coin["id"], (index / total) * 100))
             # START CHECK AND SKIP
-            if break_wallet:
-                if coin["id"] == break_wallet:
-                    break_wallet = None
+            if break_wallet >= 0:
+                if index == break_wallet:
+                    break_wallet = -1
                 else:
                     continue
             if coin["id"].startswith(("0-5x-", "1x-", "2x-", "3x-", "4x-", "5x-")):

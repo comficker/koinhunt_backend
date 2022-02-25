@@ -28,8 +28,9 @@ CHAIN_MAPPING = {
 class Command(BaseCommand):
 
     def handle(self, *args, **options):
-        full_sub_dir = "data/coingecko/step-hero/1645509247.519432.json"
+        full_sub_dir = "data/coingecko/aloha/1645705094.912683.json"
         with open(full_sub_dir, 'r') as j:
             data = json.loads(j.read())
             wallet = Wallet.objects.order_by("?").first()
-            handle_data_token(data, wallet)
+            token = handle_data_token(data, wallet)
+            print(token)

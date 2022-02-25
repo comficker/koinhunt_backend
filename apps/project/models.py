@@ -6,6 +6,7 @@ from apps.media.models import Media
 from apps.authentication.models import Wallet
 from apps.governance.models import NFT, TokenContract
 from apps.authentication.models import Wallet
+from apps.media.api.serializers import MediaSerializer
 from django.utils.translation import ugettext_lazy as _
 from django.utils import timezone
 from django.db.models import Sum
@@ -26,11 +27,17 @@ def default_partners():
         "markets": [],
         "teams": [],
         "backers": [],
+        "investors": [],
         "advisors": []
     }
 
 
-# Create your models here.
+def default_options():
+    return {
+        "locked_fields": []
+    }
+
+
 # ================ FOR PROJECT
 class Term(BaseModel, HasIDString):
     meta = models.JSONField(null=True, blank=True)
@@ -92,13 +99,14 @@ class Project(BaseModel, HasIDString, Validation):
     description = models.CharField(max_length=600, blank=True, null=True)
     media = models.ForeignKey(Media, related_name="projects", on_delete=models.SET_NULL, null=True, blank=True)
     id_string = models.CharField(max_length=200)
+    options = models.JSONField(null=True, blank=True, default=default_options)
 
     homepage = models.CharField(max_length=128, blank=True)
     links = models.JSONField(null=True, blank=True)
     features = models.JSONField(null=True, blank=True)
+    socials = models.JSONField(null=True, blank=True)
     partners = models.JSONField(default=default_partners, null=True, blank=True)
     launch_date = models.DateTimeField(null=True, blank=True)
-
     score_hunt = models.FloatField(default=0)
     score_calculated = models.FloatField(default=0)
     score_detail = models.JSONField(default=default_score)
@@ -120,6 +128,48 @@ class Project(BaseModel, HasIDString, Validation):
             self.launch_date = last_event.date_start
             self.save()
 
+    def normalize(self):
+        return {
+            "name": self.name,
+            "description": self.description,
+            "media": MediaSerializer(self.media).data
+        }
+
+    def make_partners(self):
+        self.partners = default_partners()
+        for item in self.project_events.filter(verified=True).prefetch_related("targets"):
+            if item.event_name in ["listing", "ido", "ico", "ieo", "igo"]:
+                for target in item.targets.all():
+                    self.partners["markets"].append({
+                        "meta": item.meta,
+                        "partner": target.normalize()
+                    })
+            elif item.event_name == Event.EventNameChoice.ADD_MEMBER:
+                for target in item.targets.all():
+                    self.partners["teams"].append({
+                        "meta": item.meta,
+                        "partner": target.normalize()
+                    })
+            elif item.event_name == Event.EventNameChoice.ADD_INVESTOR:
+                for target in item.targets.all():
+                    self.partners["investors"].append({
+                        "meta": item.meta,
+                        "partner": target.normalize()
+                    })
+            elif item.event_name == Event.EventNameChoice.ADD_BACKER:
+                for target in item.targets.all():
+                    self.partners["backers"].append({
+                        "meta": item.meta,
+                        "partner": target.normalize()
+                    })
+            elif item.event_name == Event.EventNameChoice.ADD_INVESTOR:
+                for target in item.targets.all():
+                    self.partners["advisors"].append({
+                        "meta": item.meta,
+                        "partner": target.normalize()
+                    })
+        self.save()
+
 
 class ProjectTerm(models.Model):
     project = models.ForeignKey(Project, related_name="project_terms", on_delete=models.CASCADE)
@@ -137,6 +187,8 @@ class Event(BaseModel, Validation):
         IGO = "igo", _("Initial Gaming Offering")
         ADD_MEMBER = "add_member", _("Add member")
         ADD_INVESTOR = "add_investor", _("Add Investor")
+        ADD_BACKER = "add_backer", _("Add backer")
+        ADD_ADVISOR = "add_advisor", _("Add advisor")
 
     meta = models.JSONField(null=True, blank=True)
     name = models.CharField(max_length=128, null=True, blank=True)
@@ -232,20 +284,29 @@ class IncentiveDistribution(BaseModel):
 # ================ FOR TOKEN TRACKER
 class TokenPrice(BaseModel):
     token = models.ForeignKey(Token, related_name="token_prices", on_delete=models.CASCADE)
+
     time_check = models.DateTimeField(default=timezone.now)
     time_open = models.DateTimeField(blank=True, null=True)
     time_close = models.DateTimeField(blank=True, null=True)
-    supply = models.FloatField(default=0)
+
     price_open = models.FloatField(default=0)
     price_close = models.FloatField(default=0)
     price_avg = models.FloatField(default=0)
 
+    supply = models.FloatField(default=0)
+    volume = models.FloatField(default=0)
 
-class TokenLog(models.Model):
-    token = models.ForeignKey(Token, related_name="token_logs", on_delete=models.CASCADE)
+
+class SocialTracker(models.Model):
+    class SMChoice(models.TextChoices):
+        FLOWER_TW = "follower_twitter", _("follower_twitter")
+        FLOWER_TG = "follower_telegram", _("follower_telegram")
+        FLOWER_FB = "follower_facebook", _("follower_facebook")
+        MEMBER_TG = "member_telegram", _("follower_telegram")
+
     time_check = models.DateTimeField(default=timezone.now)
-    field = models.CharField(max_length=50)
-    value = models.JSONField()
 
-# Hunt và Validate bằng NFT Được validate và donate sẽ thăng hạng NFT.
-# Một người được sở hữu nhiều NFT và chọn NFT để hunt hoặc validate
+    social_metric = models.CharField(max_length=50)
+    social_id = models.CharField(max_length=50)
+
+    value = models.FloatField(default=0)

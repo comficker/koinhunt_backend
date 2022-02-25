@@ -127,3 +127,5 @@ def on_validate_post_save(sender, instance, created, *args, **kwargs):
         target = contrib.target
         target.score_detail[instance.wallet.id] = instance.power
         target.save()
+        if type(target) is Event:
+            target.project.make_partners()

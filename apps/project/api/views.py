@@ -467,12 +467,21 @@ def validate(request):
                     models.Validate.objects.get_or_create(
                         wallet=operator_wallet,
                         contribute_id=m_json.get("contrib"),
-                        nft_id=m_json.get("nft") if m_json.get("nft") else None,
+                        defaults={
+                            "meta": {
+                                "review": request.data.get("review")
+                            } if key == address else None
+                        }
                     )
             else:
                 models.Validate.objects.get_or_create(
                     wallet=request.wallet,
                     contribute_id=m_json.get("contrib"),
                     nft_id=m_json.get("nft") if m_json.get("nft") else None,
+                    defaults={
+                        "meta": {
+                            "review": request.data.get("review")
+                        }
+                    }
                 )
             return Response({})
