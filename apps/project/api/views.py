@@ -185,7 +185,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
             ct = ContentType.objects.get(model="project", app_label="project")
             wl_qs = models.Validate.objects.filter(
                 wallet_id=request.GET.get("validator"),
-                target_content_type=ct
+                contribute__target_content_type=ct
             ).values_list("target_object_id")
             q = q & Q(id__in=list(map(lambda x: x[0], wl_qs)))
         if request.GET.get("terms"):
