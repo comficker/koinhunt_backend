@@ -1,4 +1,3 @@
-import random
 import time
 import os
 import json
@@ -8,7 +7,6 @@ from datetime import datetime, timezone
 from apps.media.models import Media
 from apps.base.rabbitmq import channel
 from utils.helpers import link_define
-from utils.wallets import operators
 
 CHAIN_MAPPING = {
     "binance-smart-chain": {
@@ -106,6 +104,22 @@ headers = {
     'sec-fetch-dest': 'empty',
     'referer': 'https://marketplace.axieinfinity.com/',
     'accept-language': 'en-US,en;q=0.9,vi;q=0.8',
+}
+
+DEFAULT_PJ = {
+    "meta": None,
+    "name": None,
+    "description": None,
+    "media": None,
+    "homepage": None,
+    "links": None,
+    "features": None,
+    "socials": None,
+    "launch_date": None,
+
+    "terms": [],
+    "events": [],
+    "tokens": []
 }
 
 
@@ -319,20 +333,6 @@ def handle_data_token_price(data, token):
                 "price_avg": item[1],
             }
         )
-
-
-def handle_queue_rabbitmq(ch, method, properties, body):
-    data = json.loads(body)
-    if method.encode()[7].decode("utf-8") == os.getenv("QUEUE_CGK_TOKEN"):
-        wallet, _ = Wallet.objects.get_or_create(
-            address=random.choice(list(operators.keys())),
-            chain="binance-smart-chain"
-        )
-        handle_data_token(data, wallet)
-    elif method.encode()[7].decode("utf-8") == os.getenv("QUEUE_CGK_PRICE"):
-        token = Token.objects.filter(external_ids__coingecko=data.get("token_id")).first()
-        if token:
-            handle_data_token_price(data, token)
 
 
 # ======================== FETCH ======

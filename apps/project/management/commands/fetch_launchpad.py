@@ -1,14 +1,10 @@
-import os
-import requests
-from django.core.management.base import BaseCommand, CommandError
-from apps.project.models import Token, TokenPrice
-from apps.media.models import Media
-from apps.authentication.models import Wallet
-import json
-import datetime
+from django.core.management.base import BaseCommand
+from utils import coingecko
+from utils.tracker_launchpad.gamefi import fetch_gafi, fetch_perform
 
 
 class Command(BaseCommand):
 
     def handle(self, *args, **options):
-        pass
+        fetch_gafi(1)
+        fetch_perform()

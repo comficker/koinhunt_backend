@@ -1,7 +1,7 @@
 import os
 from django.core.management.base import BaseCommand
 from apps.base.rabbitmq import channel
-from utils.coingecko import handle_queue_rabbitmq
+from utils.handle_rabbitmq import handle_queue_rabbitmq
 
 
 class Command(BaseCommand):
