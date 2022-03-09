@@ -47,12 +47,15 @@ class Command(BaseCommand):
                     if k and v:
                         sm = SOCIAL_MAPPING.get(k, None)
                         print("{}_{}_{}".format(sm["link"], v, community_data[sm["origin"]]))
-                        if community_data[sm["origin"]]:
+                        if community_data[sm["origin"]] and item.socials.get(sm["social_field"]) is None:
                             SocialTracker.objects.get_or_create(
                                 time_check=token.time_check,
                                 social_metric=sm["link"],
                                 social_id=v,
                                 value=community_data[sm["origin"]]
                             )
-                        item.socials[sm["social_field"]] = v
+                        item.socials[sm["social_field"]] = {
+                            "id": v,
+                            "total": community_data[sm["origin"]]
+                        }
             item.save()

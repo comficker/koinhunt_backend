@@ -275,11 +275,23 @@ def handle_data_token(data, wallet):
                     wallet=wallet,
                     meta={
                         "symbol": token.symbol,
-                        "target": "WBNB",
-                        "trade_url": "https://pancakeswap.finance/swap?inputCurrency=0xe8176d414560cfe1bf82fd73b986823b89e4f545&outputCurrency=0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+                        "target": ticker.get("target"),
+                        "trade_url": ticker.get("trade_url"),
                     }
                 )
                 event.targets.add(market)
+            else:
+                x = Event.objects.filter(
+                    project=project,
+                    event_name=Event.EventNameChoice.LISTING,
+                    targets=market
+                ).first()
+                x.meta = {
+                    "symbol": token.symbol,
+                    "target": ticker.get("target"),
+                    "trade_url": ticker.get("trade_url"),
+                }
+                x.save()
         ProjectTerm.objects.filter(
             project=project,
             term__taxonomy="chain"
@@ -316,7 +328,10 @@ def handle_data_token(data, wallet):
                 value=data["community_data"][key]
             )
             if project:
-                project.socials[sm["social_field"]] = data["links"].get(sm["link"])
+                project.socials[sm["social_field"]] = {
+                    "id": data["links"].get(sm["link"]),
+                    "total": data["community_data"][key]
+                }
         if project:
             project.save()
     return token
