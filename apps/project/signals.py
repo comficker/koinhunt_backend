@@ -103,6 +103,7 @@ def on_project_post_save(sender, instance, created, *args, **kwargs):
 def on_event_post_save(sender, instance, created, *args, **kwargs):
     if os.getenv("REWARD_BASE") and created:
         make_init_contrib(instance)
+    instance.project.make_partners()
 
 
 @receiver(post_save, sender=Token)
@@ -127,5 +128,3 @@ def on_validate_post_save(sender, instance, created, *args, **kwargs):
         target = contrib.target
         target.score_detail[instance.wallet.id] = instance.power
         target.save()
-        if type(target) is Event:
-            target.project.make_partners()
