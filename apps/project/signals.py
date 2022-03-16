@@ -127,4 +127,6 @@ def on_validate_post_save(sender, instance, created, *args, **kwargs):
         contrib.save()
         target = contrib.target
         target.score_detail[instance.wallet.id] = instance.power
+        target.verified = target.score_validation >= target.init_power_target
         target.save()
+
