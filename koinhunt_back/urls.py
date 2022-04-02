@@ -16,10 +16,16 @@ Including another URLconf
 from django.conf import settings
 from django.conf.urls.static import static
 from django.conf.urls import include, url
+from django.urls import re_path
+from . import view
 
 urlpatterns = [
     url(r'^v1/media/', include(('apps.media.api.urls', 'api_media'))),
     url(r'^v1/project/', include(('apps.project.api.urls', 'api_coin'))),
     url(r'^v1/auth/', include(('apps.authentication.api.urls', 'api_auth'))),
+
+    re_path(r'^main-sitemap.xsl', view.sitemap_style),
+    re_path(r'^sitemap_index.xml', view.sitemap_index),
+    url(r'(?P<flag>[-\w.]+)-sitemap.xml$', view.sitemap_detail),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 

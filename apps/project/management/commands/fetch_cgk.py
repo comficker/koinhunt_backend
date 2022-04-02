@@ -6,7 +6,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         coingecko.fetch_cgk(
-            break_wallet=-1,
+            break_wallet=10898,
             enable_detail=True,
             enable_ranges=[1],
             push_file=False,
