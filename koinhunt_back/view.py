@@ -42,7 +42,7 @@ def sitemap_detail(request, flag):
                 "updated": x.updated,
                 "changefreq": "daily"
             },
-            Term.objects.all()
+            Term.objects.filter(taxonomy=flag)
         ))
     return HttpResponse(template.render({
         "dataset": ds
