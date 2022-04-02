@@ -75,7 +75,10 @@ class Token(BaseModel, BlockChain, Validation):
     external_ids = models.JSONField(null=True, blank=True)
 
     # FOR HUNTER
-    wallet = models.ForeignKey(Wallet, related_name="tokens", null=True, blank=True, on_delete=models.SET_NULL)
+    wallet = models.ForeignKey(
+        Wallet, related_name="tokens", null=True, blank=True,
+        on_delete=models.SET_NULL, db_index=True
+    )
     nft = models.ForeignKey(NFT, related_name="tokens", null=True, blank=True, on_delete=models.SET_NULL)
 
     time_check = models.DateTimeField(default=timezone.now)
@@ -98,7 +101,7 @@ class Project(BaseModel, HasIDString, Validation):
     name = models.CharField(max_length=128)
     description = models.CharField(max_length=600, blank=True, null=True)
     media = models.ForeignKey(Media, related_name="projects", on_delete=models.SET_NULL, null=True, blank=True)
-    id_string = models.CharField(max_length=200)
+    id_string = models.CharField(max_length=200, db_index=True)
     options = models.JSONField(null=True, blank=True, default=default_options)
 
     homepage = models.CharField(max_length=128, blank=True)
@@ -111,15 +114,19 @@ class Project(BaseModel, HasIDString, Validation):
     score_calculated = models.FloatField(default=0)
     score_detail = models.JSONField(default=default_score)
 
-    terms = models.ManyToManyField(Term, through='ProjectTerm', related_name="projects", blank=True)
+    terms = models.ManyToManyField(Term, through='ProjectTerm', related_name="projects", blank=True, db_index=True)
     tokens = models.ManyToManyField(Token, related_name="projects", blank=True)
     main_token = models.ForeignKey(
         Token, related_name="main_projects", blank=True, null=True,
-        on_delete=models.SET_NULL
+        on_delete=models.SET_NULL,
+        db_index=True
     )
 
     # FOR HUNTER
-    wallet = models.ForeignKey(Wallet, related_name="hunted_projects", null=True, blank=True, on_delete=models.SET_NULL)
+    wallet = models.ForeignKey(
+        Wallet, related_name="hunted_projects", null=True, blank=True, db_index=True,
+        on_delete=models.SET_NULL
+    )
     nft = models.ForeignKey(NFT, related_name="hunted_projects", null=True, blank=True, on_delete=models.SET_NULL)
 
     def calculate_launch_date(self):
@@ -197,16 +204,23 @@ class Event(BaseModel, Validation):
 
     event_name = models.CharField(
         max_length=40,
-        default=EventNameChoice.LAUNCH
+        default=EventNameChoice.LAUNCH,
+        db_index=True
     )
-    event_date_start = models.DateTimeField(null=True, blank=True)
-    event_date_end = models.DateTimeField(null=True, blank=True)
+    event_date_start = models.DateTimeField(null=True, blank=True, db_index=True)
+    event_date_end = models.DateTimeField(null=True, blank=True, db_index=True)
 
-    project = models.ForeignKey(Project, related_name="project_events", on_delete=models.CASCADE)
+    project = models.ForeignKey(
+        Project, related_name="project_events", on_delete=models.CASCADE,
+        db_index=True
+    )
     targets = models.ManyToManyField(Project, related_name="target_events", blank=True)
 
     # FOR HUNTER
-    wallet = models.ForeignKey(Wallet, related_name="events", null=True, blank=True, on_delete=models.SET_NULL)
+    wallet = models.ForeignKey(
+        Wallet, db_index=True,
+        related_name="events", null=True, blank=True, on_delete=models.SET_NULL
+    )
     nft = models.ForeignKey(NFT, related_name="events", null=True, blank=True, on_delete=models.SET_NULL)
 
 

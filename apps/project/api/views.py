@@ -157,6 +157,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
     def list(self, request, *args, **kwargs):
+        master = "0x007307FB47F9DbAA694C474dB8C7c43Fad6258D5"
         now = timezone.now()
         qs = models.Project.objects \
             .prefetch_related("collections") \
@@ -165,14 +166,12 @@ class ProjectViewSet(viewsets.ModelViewSet):
             .prefetch_related("wallet")
 
         q = Q(db_status=1, wallet__isnull=False)
-        if request.GET.get("validating") != "true":
+        if request.GET.get("validating") == "false":
             q = q & Q(score_validation__gte=F("init_power_target"))
-        elif request.GET.get("validating") != "false":
+        elif request.GET.get("validating") == "true":
             q = q & Q(score_validation__lt=F("init_power_target"))
-            if request.wallet and request.wallet.address == "0x007307FB47F9DbAA694C474dB8C7c43Fad6258D5":
-                q = q & Q(media__isnull=True)
-            else:
-                q = q & Q(media__isnull=False)
+            if request.wallet and request.wallet.address != master:
+                q = q & (Q(media__isnull=False) | Q(wallet__address=request.wallet.address))
         if request.GET.get("terms__taxonomy"):
             q = q & Q(terms__taxonomy=request.GET.get("terms__taxonomy"))
         if request.GET.get("terms__id_string"):
