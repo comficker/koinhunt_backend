@@ -70,7 +70,7 @@ class ProjectSerializer(serializers.ModelSerializer):
 class ProjectSerializerSimple(serializers.ModelSerializer):
     class Meta:
         model = models.Project
-        fields = '__all__'
+        fields = ['name', 'id_string', 'id']
 
 
 class ProjectSerializerDetail(serializers.ModelSerializer):
@@ -161,8 +161,8 @@ class EventSerializer(serializers.ModelSerializer):
         read_only_fields = ('score_detail',)
 
     def to_representation(self, instance):
-        self.fields["targets"] = ProjectSerializer(many=True)
-        self.fields["project"] = ProjectSerializer()
+        self.fields["targets"] = ProjectSerializerSimple(many=True)
+        self.fields["project"] = ProjectSerializerSimple()
         return super(EventSerializer, self).to_representation(instance)
 
     def get_my_score(self, instance):
@@ -182,7 +182,7 @@ class EventSerializer(serializers.ModelSerializer):
 class EventSerializerSimple(serializers.ModelSerializer):
     class Meta:
         model = models.Event
-        fields = ["name", "event_name", "id", "targets"]
+        fields = ["name", "event_name", "id", "targets", "event_date_start", "event_date_end"]
         extra_fields = []
 
     def to_representation(self, instance):

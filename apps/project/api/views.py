@@ -1,6 +1,8 @@
 import os
 import base64
 import json
+import datetime
+from dateutil import parser
 from django.utils import timezone
 from django.db.models import Q, Case, When, IntegerField, DurationField
 from django.db.models import Subquery, OuterRef, F, Prefetch
@@ -19,6 +21,7 @@ from apps.media.models import Media
 from eth_account.messages import defunct_hash_message
 from web3 import Web3
 from utils.wallets import operators
+from utils.slug import vi_slug
 from . import serializers
 
 w3 = Web3(Web3.HTTPProvider(os.getenv('RPC_URL')))
@@ -159,6 +162,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
     def list(self, request, *args, **kwargs):
         master = "0x007307FB47F9DbAA694C474dB8C7c43Fad6258D5"
         now = timezone.now()
+        order_list = []
         qs = models.Project.objects \
             .prefetch_related("collections") \
             .prefetch_related("media") \
@@ -167,6 +171,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
         q = Q(db_status=1, wallet__isnull=False)
         if request.GET.get("validating") == "false":
+            order_list = ['-score_calculated', '-event_date_start']
             q = q & Q(score_validation__gte=F("init_power_target"))
         elif request.GET.get("validating") == "true":
             q = q & Q(score_validation__lt=F("init_power_target"))
@@ -196,7 +201,8 @@ class ProjectViewSet(viewsets.ModelViewSet):
                 When(event_date_start__gte=now, then=F('event_date_start') - now),
                 When(event_date_start__lt=now, then=now - F('event_date_start')),
                 output_field=DurationField(),
-            )).order_by('time_diff')
+            )
+        ).order_by('time_diff')
 
         queryset = self.filter_queryset(
             qs.filter(q).annotate(event_date_start=Subquery(ev_qs.values("event_date_start")[:1])).prefetch_related(
@@ -205,7 +211,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
                     queryset=ev_qs,
                     to_attr='active_prices'
                 )
-            ).order_by(*['-score_calculated', '-event_date_start'])
+            ).order_by(*order_list)
         )
 
         # =========== Making instance
@@ -240,6 +246,11 @@ class ProjectViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         if request.wallet is None:
             return Response(status=status.HTTP_401_UNAUTHORIZED)
+        id_string = vi_slug(request.data["name"])
+        instance = models.Project.objects.filter(id_string=id_string).first()
+        if instance:
+            save_extra(instance, request)
+            return Response(serializers.ProjectSerializer(instance).data, status=status.HTTP_201_CREATED)
         request.data["wallet"] = request.wallet.id
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -302,19 +313,30 @@ class EventViewSet(viewsets.ModelViewSet):
     lookup_field = 'pk'
 
     def list(self, request, *args, **kwargs):
+        order = ['relevance', 'time_diff']
+        if request.GET.get("ordering"):
+            order = request.GET.get("ordering").split(",")
         now = timezone.now()
         q = Q()
-        if request.GET.get("validating") == "true":
-            q = q & (Q(event_date_start__gt=now) | Q(event_date_start__isnull=True))
-            q = q & Q(verified=False)
-        else:
+        if request.GET.get("validating") == "false":
             q = q & Q(score_validation__gte=REWARD_BASE * 100)
+        elif request.GET.get("validating") == "true":
+            q = q & Q(score_validation__lt=REWARD_BASE * 100)
+        if request.GET.get("is_all") != "true":
+            q = q & Q(event_date_start__isnull=False)
         if request.GET.get("project"):
             q = q & Q(project_id=request.GET.get("project"))
         if request.GET.get("event_name"):
             q = q & Q(event_name=request.GET.get("event_name"))
-        queryset = self.filter_queryset(
-            models.Event.objects.filter(q).annotate(
+        if request.GET.get("event_date_start"):
+            d = parser.parse(request.GET.get("event_date_start"))
+            q = q & Q(event_date_start__gte=d)
+        if request.GET.get("event_date_end"):
+            d = parser.parse(request.GET.get("event_date_end"))
+            q = q & Q(event_date_start__lte=d)
+        qs = models.Event.objects.prefetch_related("targets", "project").filter(q)
+        if "relevance" in order or "time_diff" in order:
+            qs = qs.annotate(
                 relevance=Case(
                     When(event_date_start__gte=now, then=1),
                     When(event_date_start__lt=now, then=2),
@@ -324,10 +346,9 @@ class EventViewSet(viewsets.ModelViewSet):
                     When(event_date_start__gte=now, then=F('event_date_start') - now),
                     When(event_date_start__lt=now, then=now - F('event_date_start')),
                     output_field=DurationField(),
-                )).order_by('relevance', 'time_diff')
-        )
-        if request.GET.get("is_all") != "true":
-            queryset = queryset[:1]
+                )
+            ).order_by(*order)
+        queryset = self.filter_queryset(qs)
         page = self.paginate_queryset(queryset)
         if page is not None:
             serializer = self.get_serializer(page, many=True)
