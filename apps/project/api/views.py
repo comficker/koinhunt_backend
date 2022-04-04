@@ -320,6 +320,10 @@ class EventViewSet(viewsets.ModelViewSet):
         q = Q()
         if request.GET.get("validating") == "false":
             q = q & Q(score_validation__gte=REWARD_BASE * 100)
+        if request.GET.get("is_mine") == "true" and request.wallet:
+            q = q & Q(wallet=request.wallet)
+        if request.GET.get("is_following") == "true" and request.wallet:
+            pass
         elif request.GET.get("validating") == "true":
             q = q & Q(score_validation__lt=REWARD_BASE * 100)
         if request.GET.get("is_all") != "true":

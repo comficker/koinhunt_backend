@@ -286,7 +286,10 @@ def handle_data_token(data, wallet):
                     event_name=Event.EventNameChoice.LISTING,
                     targets=market
                 ).first()
+                if x.meta is None:
+                    x.meta = {}
                 x.meta = {
+                    **x.meta,
                     "symbol": token.symbol,
                     "target": ticker.get("target"),
                     "trade_url": ticker.get("trade_url"),
