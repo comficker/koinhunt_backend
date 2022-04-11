@@ -25,8 +25,8 @@ class BaseModel(models.Model):
 
 
 class HasIDString(models.Model):
-    name = models.CharField(max_length=200)
-    id_string = models.CharField(max_length=200)
+    name = models.CharField(max_length=200, db_index=True)
+    id_string = models.CharField(max_length=200, db_index=True)
 
     def save(self, **kwargs):
         # generate unique slug
@@ -82,7 +82,7 @@ class BlockChain(models.Model):
         CHAIN_ETH_MAINNET = "eth_mainnet", _("ETH mainnet")
 
     chain_id = models.CharField(default=ChainChoice.CHAIN_BSC_MAINNET, max_length=50)
-    address = models.CharField(max_length=100)
+    address = models.CharField(max_length=100, db_index=True)
 
     class Meta:
         abstract = True

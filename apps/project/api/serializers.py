@@ -141,6 +141,28 @@ class TokenSerializer(serializers.ModelSerializer):
         return super(TokenSerializer, self).to_representation(instance)
 
 
+class TokenDetailSerializer(serializers.ModelSerializer):
+    project = serializers.SerializerMethodField()
+
+    class Meta:
+        model = models.Token
+        fields = '__all__'
+        extra_fields = ["project"]
+
+    def to_representation(self, instance):
+        return super(TokenDetailSerializer, self).to_representation(instance)
+
+    def get_field_names(self, declared_fields, info):
+        expanded_fields = super(TokenDetailSerializer, self).get_field_names(declared_fields, info)
+        if getattr(self.Meta, 'extra_fields', None) and len(self.Meta.extra_fields) > 0:
+            return expanded_fields + list(self.Meta.extra_fields)
+        else:
+            return expanded_fields
+
+    def get_project(self, instance):
+        return ProjectSerializerSimple(instance.main_projects.first()).data
+
+
 class TokenSerializerSimple(serializers.ModelSerializer):
     class Meta:
         model = models.Token
@@ -230,3 +252,9 @@ class ContributeSerializerSimple(serializers.ModelSerializer):
     class Meta:
         model = models.Contribute
         fields = '__all__'
+
+
+class TokenPriceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.TokenPrice
+        fields = ["time_check", "price_avg"]

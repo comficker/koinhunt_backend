@@ -41,10 +41,8 @@ def default_options():
 # ================ FOR PROJECT
 class Term(BaseModel, HasIDString):
     meta = models.JSONField(null=True, blank=True)
-    name = models.CharField(max_length=200)
     description = models.CharField(max_length=600, blank=True, null=True)
     media = models.ForeignKey(Media, related_name="terms", on_delete=models.SET_NULL, null=True, blank=True)
-    id_string = models.CharField(max_length=200)
 
     reputation = models.FloatField(default=0)
     taxonomy = models.CharField(max_length=10, default="tag")
@@ -98,10 +96,10 @@ class Token(BaseModel, BlockChain, Validation):
 
 class Project(BaseModel, HasIDString, Validation):
     meta = models.JSONField(null=True, blank=True)
-    name = models.CharField(max_length=128)
+    id_string = models.CharField(max_length=200, db_index=True)
+    name = models.CharField(max_length=128, db_index=True)
     description = models.CharField(max_length=600, blank=True, null=True)
     media = models.ForeignKey(Media, related_name="projects", on_delete=models.SET_NULL, null=True, blank=True)
-    id_string = models.CharField(max_length=200, db_index=True)
     options = models.JSONField(null=True, blank=True, default=default_options)
 
     homepage = models.CharField(max_length=128, blank=True)
@@ -109,7 +107,7 @@ class Project(BaseModel, HasIDString, Validation):
     features = models.JSONField(null=True, blank=True)
     socials = models.JSONField(null=True, blank=True)
     partners = models.JSONField(default=default_partners, null=True, blank=True)
-    launch_date = models.DateTimeField(null=True, blank=True)
+    launch_date = models.DateTimeField(null=True, blank=True, db_index=True)
     score_hunt = models.FloatField(default=0)
     score_calculated = models.FloatField(default=0)
     score_detail = models.JSONField(default=default_score)
@@ -127,7 +125,11 @@ class Project(BaseModel, HasIDString, Validation):
         Wallet, related_name="hunted_projects", null=True, blank=True, db_index=True,
         on_delete=models.SET_NULL
     )
-    nft = models.ForeignKey(NFT, related_name="hunted_projects", null=True, blank=True, on_delete=models.SET_NULL)
+    nft = models.ForeignKey(
+        NFT,
+        related_name="hunted_projects",
+        null=True, blank=True, on_delete=models.SET_NULL
+    )
 
     def calculate_launch_date(self):
         last_event = self.project_events.filter(event_name="launch").order_by("-date_start").first()
@@ -207,14 +209,26 @@ class Event(BaseModel, Validation):
         default=EventNameChoice.LAUNCH,
         db_index=True
     )
+
     event_date_start = models.DateTimeField(null=True, blank=True, db_index=True)
+    date_start_y = models.IntegerField(null=True, blank=True)
+    date_start_mo = models.IntegerField(null=True, blank=True)
+    date_start_d = models.IntegerField(null=True, blank=True)
+    date_start_h = models.IntegerField(null=True, blank=True)
+    date_start_m = models.IntegerField(null=True, blank=True)
+
     event_date_end = models.DateTimeField(null=True, blank=True, db_index=True)
+    date_end_y = models.IntegerField(null=True, blank=True)
+    date_end_mo = models.IntegerField(null=True, blank=True)
+    date_end_d = models.IntegerField(null=True, blank=True)
+    date_end_h = models.IntegerField(null=True, blank=True)
+    date_end_m = models.IntegerField(null=True, blank=True)
 
     project = models.ForeignKey(
         Project, related_name="project_events", on_delete=models.CASCADE,
         db_index=True
     )
-    targets = models.ManyToManyField(Project, related_name="target_events", blank=True)
+    targets = models.ManyToManyField(Project, related_name="target_events", blank=True, db_index=True)
 
     # FOR HUNTER
     wallet = models.ForeignKey(
@@ -297,9 +311,19 @@ class IncentiveDistribution(BaseModel):
 
 # ================ FOR TOKEN TRACKER
 class TokenPrice(BaseModel):
-    token = models.ForeignKey(Token, related_name="token_prices", on_delete=models.CASCADE)
+    class RangeChoice(models.TextChoices):
+        M5 = "m5", _("5 Minutes")
+        M15 = "m15", _("15 Minutes")
+        M30 = "m30", _("30 Minutes")
+        H = "h", _("1 Hour")
+        H12 = "12h", _("12 Hours")
+        D = "d", _("Day")
+        MO = "M", _("1 Month")
 
-    time_check = models.DateTimeField(default=timezone.now)
+    token = models.ForeignKey(Token, related_name="token_prices", on_delete=models.CASCADE, db_index=True)
+    range = models.CharField(max_length=50, default=RangeChoice.M5, db_index=True)
+
+    time_check = models.DateTimeField(default=timezone.now, db_index=True)
     time_open = models.DateTimeField(blank=True, null=True)
     time_close = models.DateTimeField(blank=True, null=True)
 
@@ -318,7 +342,7 @@ class SocialTracker(models.Model):
         FLOWER_FB = "follower_facebook", _("follower_facebook")
         MEMBER_TG = "member_telegram", _("follower_telegram")
 
-    time_check = models.DateTimeField(default=timezone.now)
+    time_check = models.DateTimeField(default=timezone.now, db_index=True)
 
     social_metric = models.CharField(max_length=50)
     social_id = models.CharField(max_length=50)
