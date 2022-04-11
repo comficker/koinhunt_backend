@@ -1,7 +1,6 @@
 import os
 import base64
 import json
-import datetime
 from dateutil import parser
 from django.utils import timezone
 from django.db.models import Q, Case, When, IntegerField, DurationField
@@ -14,6 +13,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import viewsets
+from rest_framework import generics
 from rest_framework.filters import OrderingFilter, SearchFilter
 from apps.base import pagination
 from apps.project import models
@@ -23,6 +23,7 @@ from web3 import Web3
 from utils.wallets import operators
 from utils.slug import vi_slug
 from . import serializers
+from django_filters import rest_framework as filters
 
 w3 = Web3(Web3.HTTPProvider(os.getenv('RPC_URL')))
 CACHE_TTL = getattr(settings, 'CACHE_TTL', DEFAULT_TIMEOUT)
@@ -269,14 +270,23 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
 class TokenViewSet(viewsets.ModelViewSet):
     models = models.Token
-    queryset = models.objects.order_by('-id')
+    queryset = models.objects.order_by('-id').prefetch_related("main_projects")
     serializer_class = serializers.TokenSerializer
     pagination_class = pagination.Pagination
     filter_backends = [OrderingFilter, SearchFilter]
     search_fields = ['token_address', 'token_symbol']
     lookup_field = 'address'
 
+    def retrieve(self, request, *args, **kwargs):
+        if request.GET.get("chain_id"):
+            instance = models.Token.objects.get(chain_id=request.GET.get("chain_id"), address=kwargs["address"])
+        else:
+            instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
+
     def list(self, request, *args, **kwargs):
+        self.serializer_class = serializers.TokenSerializer
         queryset = self.filter_queryset(self.get_queryset())
 
         page = self.paginate_queryset(queryset)
@@ -416,6 +426,24 @@ class CollectionViewSet(viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         pass
+
+
+class PriceFilter(filters.FilterSet):
+    time_start = filters.DateTimeFilter(field_name="time_check", lookup_expr='gte')
+    time_end = filters.DateTimeFilter(field_name="time_check", lookup_expr='lte')
+
+    class Meta:
+        model = models.TokenPrice
+        fields = ['token', 'range', 'time_check']
+
+
+class PriceViewSet(viewsets.ViewSet, generics.ListAPIView):
+    models = models.TokenPrice
+    queryset = models.objects.order_by('-id')
+    serializer_class = serializers.TokenPriceSerializer
+    pagination_class = pagination.Pagination
+    filter_backends = [OrderingFilter, filters.DjangoFilterBackend]
+    filterset_class = PriceFilter
 
 
 @api_view(['POST'])
