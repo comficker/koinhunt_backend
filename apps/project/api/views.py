@@ -439,7 +439,7 @@ class PriceFilter(filters.FilterSet):
 
 class PriceViewSet(viewsets.ViewSet, generics.ListAPIView):
     models = models.TokenPrice
-    queryset = models.objects.order_by('-id')
+    queryset = models.objects.order_by('-time_check')
     serializer_class = serializers.TokenPriceSerializer
     pagination_class = pagination.Pagination
     filter_backends = [OrderingFilter, filters.DjangoFilterBackend]
