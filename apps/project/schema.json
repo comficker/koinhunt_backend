@@ -1,0 +1,117 @@
+{
+    "project": {
+        "name": 0,
+        "description": null,
+        "media": null,
+        "homepage": null,
+        "links": [
+            {
+                "url": null,
+                "title": null
+            }
+        ],
+        "features": [],
+        "socials": {
+            "twitter": {
+                "id": null,
+                "total": 0
+            },
+            "telegram_channel": {},
+            "telegram_group": {},
+            "facebook": {}
+        },
+        "meta": {}
+    },
+    "token": {
+        "homepage": null,
+        "socials": {
+            "twitter": {
+                "id": null,
+                "total": 0
+            },
+            "telegram_channel": {},
+            "telegram_group": {},
+            "facebook": {}
+        },
+        "name": null,
+        "description": null,
+        "media": null,
+        "symbol": null,
+        "decimal": null,
+        "total_supply": null,
+        "circulating_supply": null,
+        "price_init": null,
+        "price_current": null,
+        "price_ath": null,
+        "price_atl": null,
+        "tokenomics": null,
+        "platforms": {
+            "ethereum": null,
+            "polygon-pos": null
+        },
+        "short_report": {
+            "ath": 0.139527,
+            "atl": 0.00749946,
+            "pac": 19,
+            "pcc": 1,
+            "low_24h": 0.00789385,
+            "ath_date": "2021-05-26T05:32:15.598Z",
+            "atl_date": "2022-01-24T17:21:30.016Z",
+            "high_24h": 0.00934231,
+            "total_volume": 30029,
+            "price_current": 0.0081057,
+            "price_change_percentage_24h": -12.60352
+        },
+        "external_ids": {
+            "coingecko": "aloha"
+        }
+    },
+    "event": {
+        "event_name": null,
+        "name": null,
+        "description": null,
+        "media": null,
+        "date_start_y": null,
+        "date_start_mo": null,
+        "date_start_d": null,
+        "date_start_h": null,
+        "date_start_m": null,
+        "date_end_y": null,
+        "date_end_mo": null,
+        "date_end_d": null,
+        "date_end_h": null,
+        "date_end_m": null,
+        "project": {
+            "homepage": null,
+            "name": 0,
+            "description": null,
+            "media": null,
+            "links": [],
+            "features": [],
+            "socials": [],
+            "meta": {}
+        },
+        "targets": [
+            {
+                "homepage": null,
+                "name": 0,
+                "description": null,
+                "media": null,
+                "links": [],
+                "features": [],
+                "socials": [],
+                "meta": {}
+            }
+        ]
+    },
+    "price": {
+        "source": "null",
+        "token_id": null,
+        "data": [
+            [
+                1641297635870,
+                46803.15078633856
+            ]
+        ]
+    }
+}

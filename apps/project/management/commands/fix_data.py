@@ -1,5 +1,6 @@
 from django.core.management.base import BaseCommand
 from apps.project.models import Token, Contribute, Validate, Project, SocialTracker
+from urllib.parse import urlparse
 import re
 
 
@@ -77,7 +78,15 @@ def remake_partner_project():
         p.make_partners()
 
 
+def url_2_domain():
+    projects = Project.objects.filter(homepage__isnull=False)
+    for item in projects:
+        domain = urlparse(item.homepage).netloc
+        item.homepage = domain
+        item.save()
+
+
 class Command(BaseCommand):
 
     def handle(self, *args, **options):
-        remake_partner_project()
+        url_2_domain()

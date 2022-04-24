@@ -2,7 +2,7 @@ import os
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from apps.governance.models import TokenContract
-from apps.project.models import Event, Token, Project, Incentive, Contribute, Validate, IncentiveDistribution
+from apps.project.models import Event, Token, Project, Incentive, Contribute, Validate, IncentiveDistribution, Wallet
 from django.contrib.contenttypes.models import ContentType
 from utils.contracts import get_power
 from django.utils import timezone
@@ -45,17 +45,25 @@ def make_init_contrib(instance):
         power_target=power_target,
         is_active=True,
     )
-    init_validate = Validate.objects.create(
-        contribute=contrib,
-        wallet=instance.wallet,
-        nft=instance.nft,
-        power=get_power(instance) * 1.5
-    )
+    power = 0
+    if instance.wallet.address in operators.keys():
+        for w in operators.keys():
+            wallet, _ = Wallet.objects.get_or_create(
+                address=w,
+                chain="binance-smart-chain"
+            )
+            init_validate = Validate.objects.create(
+                contribute=contrib,
+                wallet=instance.wallet,
+                nft=instance.nft,
+                power=get_power(instance) * 1.5
+            )
+            power = power + init_validate.power
     instance.refresh_from_db()
     if instance.meta is None:
         instance.meta = {}
     if type(instance) is Project:
-        instance.score_hunt = init_validate.power
+        instance.score_hunt = power
     instance.meta["contrib"] = contrib.id
     instance.meta["contrib_reward"] = REWARD_BASE
     instance.init_power_target = power_target

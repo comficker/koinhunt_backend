@@ -1,0 +1,23 @@
+{
+    'name': 'Bit Hotel',
+    'description': 'Bit Hotel is a Social-first Play 2 Earn NFT Gaming Metaverse, in which users will be able to use Bit Hotel tokens to acquire native NFTs and participate in decentralised governance',
+    'media': 'https://gamefi-public.s3.amazonaws.com/aggregator/optimized/bit-hotel/token.png',
+    'homepage': b
+    '',
+    'links': [],
+    'features': [
+        "We see a huge gap in the market when it comes to social& community aspects on the blockchain. Currently, the only viable options are either Discord or Telegram; this mainly has to do with both the anonymity and accessibility that those platforms have. It is no suprise that we are currently holding this AMA on Telegram. However, we are not able to express our authenticity, we all have very cool online usernames and profile pictures; but there is no immersive audiovisual component that does justice to our individuality. The majority of the demographic using the blockchain belongs to generation Y, who grew up with those classic 8-bit graphics. In the Bit Hotel metaverse, we try to give every user individuality and an in-game identity within that 8-bit nostalgic charm. Practically, users will be able to purchase NFT characters & rooms, in which they can invite their friends, host small gatherings and use as their own personal social hub. They will be able to decorate their rooms with furniture, NFT artwork, and other artifacts. We will also be selling conference rooms/ club houses to DAOs and communities; in which one could host AMA's, organize IDOs, and other communal activities. Only members with a custom NFT characters will have exclusive access to their particular conference room. Bit Hotel will also be a framework, on which established companies will be able to host their groundbreaking technology and create a collaborative process with interoperability between projects as that is the beauty of blockchain. We want to make Bit Hotel as accessible as possible, our metaverse will therefore be mobile compatible too."
+    ],
+    'categories': 'Real-Time Strategy,Turn-Based Strategy,Metaverse,Game',
+    'chains': [],
+    'socials': {
+        'twitter': None,
+        'facebook': None,
+        'discord': None,
+        'youtube': None,
+        'twitch': None,
+        'telegram_channel': None,
+        'telegram_group': None
+    },
+    'meta': {}
+}
